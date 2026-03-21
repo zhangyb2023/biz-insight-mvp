@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+.next/
+out/
+dist/
+
+# Environment files (contain API keys)
+.env
+.env.local
+.env.*.local
+
+# Database
+*.db
+
+# Crawl cache (too large, regenerate on new machine)
+data/crawl_cache/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build info
+tsconfig.tsbuildinfo
+*.db

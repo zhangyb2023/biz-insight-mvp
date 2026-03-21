@@ -1,0 +1,87 @@
+[
+  {
+    "group": "domestic_automotive_software",
+    "companyName": "普华基础软件",
+    "website": "https://www.i-soft.com.cn/",
+    "sources": [
+      { "url": "https://www.i-soft.com.cn/news/dynamic.html", "type": "news", "expectedMode": "news_list" },
+      { "url": "https://www.i-soft.com.cn/product/vehicle.html", "type": "product", "expectedMode": "product_detail" }
+    ]
+  },
+  {
+    "group": "domestic_automotive_software",
+    "companyName": "经纬恒润",
+    "website": "https://www.hirain.com/",
+    "sources": [
+      { "url": "https://www.hirain.com/news/%E8%B5%84%E8%AE%AF%E5%8A%A8%E6%80%81-37", "type": "news", "expectedMode": "news_list" },
+      { "url": "https://www.hirain.com/blank4361.html", "type": "general", "expectedMode": "portal_home" }
+    ]
+  },
+  {
+    "group": "domestic_automotive_software",
+    "companyName": "东软睿驰",
+    "website": "https://www.reachauto.com/",
+    "sources": [
+      { "url": "https://www.reachauto.com/corporate-news/", "type": "news", "expectedMode": "news_list" },
+      { "url": "https://www.reachauto.com/corporate-news/industry-activities/", "type": "news", "expectedMode": "news_list" }
+    ]
+  },
+  {
+    "group": "domestic_automotive_software",
+    "companyName": "中科创达",
+    "website": "https://www.thundersoft.com/",
+    "sources": [
+      { "url": "https://www.thundersoft.com/category/newsroom/", "type": "news", "expectedMode": "news_list" },
+      { "url": "https://www.thundersoft.com/", "type": "general", "expectedMode": "portal_home" }
+    ]
+  },
+  {
+    "group": "global_automotive_software",
+    "companyName": "Vector",
+    "website": "https://www.vector.com/cn/zh/",
+    "sources": [
+      { "url": "https://www.vector.com/cn/zh/products/solutions/", "type": "product", "expectedMode": "product_detail" },
+      { "url": "https://www.vector.com/cn/zh/products/products-a-z/", "type": "product", "expectedMode": "product_detail" }
+    ]
+  },
+  {
+    "group": "global_automotive_software",
+    "companyName": "Elektrobit",
+    "website": "https://www.elektrobit.com/",
+    "sources": [
+      { "url": "https://www.elektrobit.com/products/ecu/eb-tresos/", "type": "product", "expectedMode": "product_detail" }
+    ]
+  },
+  {
+    "group": "global_automotive_software",
+    "companyName": "ETAS",
+    "website": "https://etas.services/",
+    "sources": [
+      { "url": "https://etas.services/ww/en/products-services/vehicle-software-platform-suite/rta-car/", "type": "product", "expectedMode": "product_detail" }
+    ]
+  },
+  {
+    "group": "global_automotive_software",
+    "companyName": "KPIT",
+    "website": "https://www.kpit.com/",
+    "sources": [
+      { "url": "https://www.kpit.com/automotive-software/", "type": "product", "expectedMode": "product_detail" }
+    ]
+  },
+  {
+    "group": "news_portal_samples",
+    "companyName": "新浪网站",
+    "website": "https://news.sina.com.cn/",
+    "sources": [
+      { "url": "https://news.sina.com.cn/", "type": "news", "expectedMode": "portal_home" }
+    ]
+  },
+  {
+    "group": "news_portal_samples",
+    "companyName": "网易新闻",
+    "website": "https://news.163.com/",
+    "sources": [
+      { "url": "https://news.163.com/", "type": "news", "expectedMode": "portal_home" }
+    ]
+  }
+]

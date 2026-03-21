@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#__next {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-sand text-ink;
+  background-image:
+    radial-gradient(circle at top left, rgba(207, 230, 212, 0.7), transparent 35%),
+    radial-gradient(circle at bottom right, rgba(200, 100, 59, 0.08), transparent 30%);
+}
+
+a {
+  @apply text-moss transition-colors;
+}
+
+a:hover {
+  @apply text-ember;
+}

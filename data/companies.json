@@ -1,0 +1,407 @@
+[
+  {
+    "id": "vector",
+    "name": "Vector",
+    "website": "https://www.vector.com/",
+    "is_active": true,
+    "keywords": [
+      "AUTOSAR",
+      "工具链",
+      "嵌入式",
+      "车载软件",
+      "SDV"
+    ],
+    "urls": [
+      "https://www.vector.com/",
+      "https://www.vector.com/int/en/company/news/"
+    ]
+  },
+  {
+    "id": "etas",
+    "name": "ETAS",
+    "website": "https://www.etas.com/",
+    "is_active": true,
+    "keywords": [
+      "AUTOSAR",
+      "vehicle software platform",
+      "classic autosar",
+      "adaptive autosar",
+      "SDV"
+    ],
+    "urls": [
+      "https://www.etas.com/",
+      "https://www.etas.com/ww/en/company/news-and-events/"
+    ]
+  },
+  {
+    "id": "elektrobit",
+    "name": "Elektrobit",
+    "website": "https://www.elektrobit.com/",
+    "is_active": true,
+    "keywords": [
+      "AUTOSAR",
+      "ECU software",
+      "classic autosar",
+      "adaptive autosar",
+      "BSW"
+    ],
+    "urls": [
+      "https://www.elektrobit.com/",
+      "https://www.elektrobit.com/newsroom/",
+      "https://www.elektrobit.com/news/"
+    ]
+  },
+  {
+    "id": "thundersoft",
+    "name": "中科创达",
+    "website": "https://www.thundersoft.com/",
+    "is_active": true,
+    "keywords": [
+      "智能汽车",
+      "操作系统",
+      "中间件",
+      "平台软件",
+      "智能驾驶"
+    ],
+    "urls": [
+      "https://www.thundersoft.com/",
+      "https://www.thundersoft.com/category/newsroom/",
+      "https://www.thundersoft.com/case/"
+    ]
+  },
+  {
+    "id": "huawei-qiankun-auto",
+    "name": "华为乾崑智能汽车解决方案",
+    "website": "https://intelligentautomotive.huawei.com/",
+    "is_active": true,
+    "keywords": [
+      "智能汽车解决方案",
+      "智能驾驶",
+      "智能座舱",
+      "车控",
+      "鸿蒙座舱"
+    ],
+    "urls": [
+      "https://intelligentautomotive.huawei.com/",
+      "https://intelligentautomotive.huawei.com/cn/solutions/",
+      "https://intelligentautomotive.huawei.com/cn/news/"
+    ]
+  },
+  {
+    "id": "autosar",
+    "name": "AUTOSAR",
+    "website": "https://www.autosar.org/",
+    "is_active": true,
+    "keywords": [
+      "AUTOSAR",
+      "standard",
+      "classic autosar",
+      "adaptive autosar",
+      "ecosystem"
+    ],
+    "urls": [
+      "https://www.autosar.org/",
+      "https://www.autosar.org/zh/",
+      "https://www.autosar.org/about",
+      "https://www.autosar.org/standards",
+      "https://www.autosar.org/standards/classic-platform",
+      "https://www.autosar.org/working-groups/classic-platform"
+    ]
+  },
+  {
+    "id": "i-soft",
+    "name": "普华基础软件",
+    "website": "https://www.i-soft.com.cn/",
+    "is_active": true,
+    "keywords": [
+      "AUTOSAR",
+      "基础软件",
+      "车用操作系统",
+      "域控制器",
+      "中间件"
+    ],
+    "urls": [
+      "https://www.i-soft.com.cn/product/vehicle.html"
+    ]
+  },
+  {
+    "id": "reachauto",
+    "name": "东软睿驰",
+    "website": "https://www.reachauto.com/",
+    "is_active": true,
+    "keywords": [
+      "AUTOSAR",
+      "基础软件",
+      "智能汽车",
+      "平台软件",
+      "整车操作系统"
+    ],
+    "urls": [
+      "https://www.reachauto.com/"
+    ]
+  },
+  {
+    "id": "neusar",
+    "name": "NeuSAR",
+    "website": "https://www.neusar.com/",
+    "is_active": true,
+    "keywords": [
+      "AUTOSAR",
+      "AP",
+      "CP",
+      "中间件",
+      "基础软件"
+    ],
+    "urls": [
+      "https://www.neusar.com/"
+    ]
+  },
+  {
+    "id": "hirain",
+    "name": "经纬恒润",
+    "website": "https://www.hirain.com/",
+    "is_active": true,
+    "keywords": [
+      "AUTOSAR",
+      "域控制器",
+      "智能驾驶",
+      "汽车电子",
+      "基础软件"
+    ],
+    "urls": [
+      "https://www.hirain.com/"
+    ]
+  },
+  {
+    "id": "denso",
+    "name": "电装",
+    "website": "https://www.denso.com/",
+    "is_active": true,
+    "keywords": [
+      "汽车零部件",
+      "域控制器",
+      "车联网",
+      "自动驾驶"
+    ],
+    "urls": [
+      "https://www.denso.com/",
+      "https://www.denso.com/global/en/products-and-services/automotive/"
+    ]
+  },
+  {
+    "id": "zeekr",
+    "name": "极氪",
+    "website": "https://www.zeekrlife.com/",
+    "is_active": true,
+    "keywords": [
+      "智能汽车",
+      "电动车",
+      "智能驾驶",
+      "座舱"
+    ],
+    "urls": [
+      "https://www.zeekrlife.com/"
+    ]
+  },
+  {
+    "id": "horizon-robotics",
+    "name": "地平线",
+    "website": "https://www.horizon.auto/",
+    "is_active": true,
+    "keywords": [
+      "智能驾驶",
+      "车载计算平台",
+      "征程",
+      "车规芯片",
+      "智驾平台",
+      "生态合作"
+    ],
+    "urls": [
+      "https://www.horizon.auto/"
+    ]
+  },
+  {
+    "id": "black-sesame",
+    "name": "黑芝麻智能",
+    "website": "https://www.blacksesame.com/",
+    "is_active": true,
+    "keywords": [
+      "自动驾驶",
+      "车规芯片",
+      "计算平台",
+      "华山",
+      "武当",
+      "生态合作"
+    ],
+    "urls": [
+      "https://www.blacksesame.com/",
+      "https://www.blacksesame.com/products"
+    ]
+  },
+  {
+    "id": "semi-drive",
+    "name": "芯驰科技",
+    "website": "https://www.semidrive.com/",
+    "is_active": true,
+    "keywords": [
+      "车规芯片",
+      "座舱芯片",
+      "中央计算",
+      "域控制器",
+      "汽车电子",
+      "生态合作"
+    ],
+    "urls": [
+      "https://www.semidrive.com/",
+      "https://www.semidrive.com/news",
+      "https://www.semidrive.com/news/corporate-news.html",
+      "https://www.semidrive.com/news/ecological-cooperation.html",
+      "https://www.semidrive.com/news/mass-production.html"
+    ]
+  },
+  {
+    "id": "tttech-auto",
+    "name": "TTTech Auto",
+    "website": "https://www.tttech-auto.com/",
+    "is_active": true,
+    "keywords": [
+      "SDV",
+      "middleware",
+      "platform software",
+      "motionwise",
+      "automotive software"
+    ],
+    "urls": [
+      "https://www.tttech-auto.com/"
+    ]
+  },
+  {
+    "id": "36kr-home",
+    "name": "36氪",
+    "website": "https://www.36kr.com",
+    "urls": [
+      "https://www.36kr.com",
+      "https://www.36kr.com/news",
+      "https://www.36kr.com/tech"
+    ],
+    "keywords": [
+      "汽车",
+      "科技",
+      "智能驾驶",
+      "电动车"
+    ],
+    "is_active": true,
+    "type": "media"
+  },
+  {
+    "id": "huxiu",
+    "name": "虎嗅",
+    "website": "https://www.huxiu.com",
+    "urls": [
+      "https://www.huxiu.com"
+    ],
+    "keywords": [
+      "汽车",
+      "科技",
+      "商业"
+    ],
+    "is_active": true,
+    "type": "media"
+  },
+  {
+    "id": "tmtpost",
+    "name": "钛媒体",
+    "website": "https://www.tmtpost.com",
+    "urls": [
+      "https://www.tmtpost.com",
+      "https://www.tmtpost.com/news"
+    ],
+    "keywords": [
+      "汽车",
+      "科技",
+      "TMT"
+    ],
+    "is_active": true,
+    "type": "media"
+  },
+  {
+    "id": "geekpark",
+    "name": "极客公园",
+    "website": "https://www.geekpark.net",
+    "urls": [
+      "https://www.geekpark.net"
+    ],
+    "keywords": [
+      "汽车",
+      "科技",
+      "产品"
+    ],
+    "is_active": true,
+    "type": "media"
+  },
+  {
+    "id": "autohome",
+    "name": "汽车之家",
+    "website": "https://www.autohome.com.cn",
+    "urls": [
+      "https://www.autohome.com.cn/news/",
+      "https://www.autohome.com.cn/industry/"
+    ],
+    "keywords": [
+      "汽车",
+      "新闻",
+      "资讯",
+      "行业"
+    ],
+    "is_active": true,
+    "type": "media"
+  },
+  {
+    "id": "iyiou",
+    "name": "亿欧汽车",
+    "website": "https://www.iyiou.com",
+    "urls": [
+      "https://www.iyiou.com/",
+      "https://www.iyiou.com/news/"
+    ],
+    "keywords": [
+      "汽车",
+      "科技",
+      "行业",
+      "出行"
+    ],
+    "is_active": true,
+    "type": "media"
+  },
+  {
+    "id": "pcauto",
+    "name": "太平洋汽车",
+    "website": "https://www.pcauto.com.cn",
+    "urls": [
+      "https://www.pcauto.com.cn/",
+      "https://www.pcauto.com.cn/xinwen/"
+    ],
+    "keywords": [
+      "汽车",
+      "新闻",
+      "评测"
+    ],
+    "is_active": true,
+    "type": "media"
+  },
+  {
+    "id": "sinaauto",
+    "name": "新浪汽车",
+    "website": "https://auto.sina.com.cn",
+    "urls": [
+      "https://auto.sina.com.cn/"
+    ],
+    "keywords": [
+      "汽车",
+      "新闻",
+      "资讯"
+    ],
+    "is_active": true,
+    "type": "media"
+  }
+]
