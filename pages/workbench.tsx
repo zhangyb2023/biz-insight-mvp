@@ -52,6 +52,13 @@ function getSourceTypeFromUrl(url: string): string {
   return "general";
 }
 
+function urlTypeToCategory(urlType: string): string {
+  if (urlType === "news") return "media";
+  if (urlType === "ecosystem") return "professional";
+  if (urlType === "product") return "official";
+  return "general";
+}
+
 export const getServerSideProps: GetServerSideProps<Props> = async () => {
   return {
     props: getSourceManagerData()
@@ -73,7 +80,7 @@ export default function WorkbenchPage(props: Props) {
       const companySources = props.sources.filter(s => s.company_id === company.id);
       const sourceTypes = new Set<string>();
       companySources.forEach(s => {
-        sourceTypes.add(getSourceTypeFromUrl(s.url));
+        sourceTypes.add(urlTypeToCategory(s.url_type || "general"));
       });
       return {
         ...company,
@@ -92,15 +99,8 @@ export default function WorkbenchPage(props: Props) {
       general: []
     };
     companiesWithSources.forEach(company => {
-      if (company.sourceTypes.includes("official")) {
-        groups.official.push(company);
-      } else if (company.sourceTypes.includes("media")) {
-        groups.media.push(company);
-      } else if (company.sourceTypes.includes("professional")) {
-        groups.professional.push(company);
-      } else {
-        groups.general.push(company);
-      }
+      const companyType = company.company_type || "general";
+      groups[companyType].push(company);
     });
     return groups;
   }, [companiesWithSources]);
@@ -189,13 +189,47 @@ export default function WorkbenchPage(props: Props) {
 
           const data = await response.json();
           
-          if (data.ok) {
-            companyResult.successCount = data.successCount || 0;
-            companyResult.failureCount = data.failureCount || 0;
-            companyResult.cacheHitCount = data.cacheHitCount || 0;
-            companyResult.changedCount = data.changedCount || 0;
-            companyResult.insightCount = data.insightCount || 0;
-            companyResult.status = "success";
+          if (data.ok && data.jobId) {
+            let jobStatus = data.status || "running";
+            let jobResult = null;
+            const maxWaitSeconds = 180;
+            let pollCount = 0;
+
+            while (true) {
+              if (cancelRef.current) break;
+              
+              const statusResp = await fetch(`/api/crawl?jobId=${data.jobId}`);
+              const statusData = await statusResp.json();
+              
+              if (statusData.ok) {
+                if (statusData.result) {
+                  jobResult = statusData.result;
+                  jobStatus = statusData.status;
+                  break;
+                }
+                if (statusData.status === "success" || statusData.status === "failed" || statusData.status === "partial") {
+                  jobStatus = statusData.status;
+                  break;
+                }
+                jobStatus = statusData.status || jobStatus;
+              }
+
+              pollCount++;
+              if (pollCount >= maxWaitSeconds) break;
+              await new Promise(r => setTimeout(r, 1000));
+            }
+
+            if (jobResult) {
+              companyResult.successCount = jobResult.successCount || 0;
+              companyResult.failureCount = jobResult.failureCount || 0;
+              companyResult.cacheHitCount = jobResult.cacheHitCount || 0;
+              companyResult.changedCount = jobResult.changedCount || 0;
+              companyResult.insightCount = jobResult.insightCount || 0;
+              companyResult.status = jobStatus === "success" || jobStatus === "partial" ? "success" : "failed";
+            } else {
+              companyResult.status = "failed";
+              companyResult.error = `Job ${jobStatus}, no result after ${pollCount}s`;
+            }
             
             totalSuccess += companyResult.successCount;
             totalFailure += companyResult.failureCount;
@@ -490,19 +524,20 @@ export default function WorkbenchPage(props: Props) {
                                 <h4 className="text-base font-semibold text-ink truncate">{company.name}</h4>
                               </div>
                               <p className="mt-1 text-xs text-slate-500 truncate">{company.website}</p>
-                              <div className="mt-2 flex flex-wrap gap-1">
-                                {company.sourceTypes.map(t => (
-                                  <span key={t} className={`rounded-full px-2 py-0.5 text-xs ${sourceTypeLabels[t]?.bgColor} ${sourceTypeLabels[t]?.color}`}>
-                                    {sourceTypeLabels[t]?.label}
-                                  </span>
-                                ))}
-                              </div>
                             </div>
                             <div className="flex items-center gap-3">
                               <div className="rounded-full bg-slate-100 px-3 py-1 text-center">
                                 <span className="text-lg font-bold text-slate-700">{company.sourceCount}</span>
                                 <p className="text-xs text-slate-500">网址</p>
                               </div>
+                              {company.lastCrawlAt && (
+                                <div className="rounded-full bg-amber-50 px-3 py-1 text-center">
+                                  <span className="text-sm font-medium text-amber-700">
+                                    {formatShanghaiDateTime(company.lastCrawlAt)}
+                                  </span>
+                                  <p className="text-xs text-amber-600">最近爬取</p>
+                                </div>
+                              )}
                               <button
                                 onClick={(e) => toggleExpand(company.id, e)}
                                 className={`rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold transition-all ${
@@ -552,7 +587,7 @@ export default function WorkbenchPage(props: Props) {
                                 onClick={(e) => e.stopPropagation()}
                                 className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
                               >
-                                查看公司详情
+                                查看爬取详情
                               </a>
                             </div>
                           </div>

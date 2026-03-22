@@ -31,6 +31,20 @@ function getSourceTypeFromUrl(url: string): string {
   return "general";
 }
 
+function urlTypeToCategory(urlType: string): string {
+  if (urlType === "news") return "media";
+  if (urlType === "ecosystem") return "professional";
+  if (urlType === "product") return "official";
+  return "general";
+}
+
+const companyTypeOptions = [
+  { value: "official", label: "官方" },
+  { value: "media", label: "媒体" },
+  { value: "professional", label: "专业机构" },
+  { value: "general", label: "综合" }
+];
+
 export const getServerSideProps: GetServerSideProps<Props> = async () => {
   return {
     props: getSourceManagerData()
@@ -61,7 +75,7 @@ export default function ConsolePage(props: Props) {
       const companySources = currentSources.filter(s => s.company_id === company.id);
       const sourceTypes = new Set<string>();
       companySources.forEach(s => {
-        sourceTypes.add(getSourceTypeFromUrl(s.url));
+        sourceTypes.add(urlTypeToCategory(s.url_type || "general"));
       });
       return {
         ...company,
@@ -80,15 +94,8 @@ export default function ConsolePage(props: Props) {
       general: []
     };
     companiesWithSources.forEach(company => {
-      if (company.sourceTypes.includes("official")) {
-        groups.official.push(company);
-      } else if (company.sourceTypes.includes("media")) {
-        groups.media.push(company);
-      } else if (company.sourceTypes.includes("professional")) {
-        groups.professional.push(company);
-      } else {
-        groups.general.push(company);
-      }
+      const companyType = company.company_type || "general";
+      groups[companyType].push(company);
     });
     return groups;
   }, [companiesWithSources]);
@@ -187,7 +194,9 @@ export default function ConsolePage(props: Props) {
         website: companyWebsite.trim(),
         keywords: companyKeywords.split(",").map(k => k.trim()).filter(Boolean),
         urls: [],
-        is_active: true
+        is_active: true,
+        lastCrawlAt: null,
+        company_type: null
       }]);
       setCompanyName("");
       setCompanyWebsite("");
@@ -245,6 +254,25 @@ export default function ConsolePage(props: Props) {
       setMessage(`恢复失败: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setRestoringCompanyId(null);
+    }
+  }
+
+  async function handleUpdateCompanyType(companyId: string, newType: string) {
+    try {
+      const res = await fetch(`/api/companies/${companyId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ company_type: newType })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setMessage(`更新类别失败: ${data.message || data.error || "未知错误"}`);
+        return;
+      }
+      setCurrentCompanies(prev => prev.map(c => c.id === companyId ? { ...c, company_type: newType } : c));
+      setMessage("类别更新成功");
+    } catch (err) {
+      setMessage(`更新类别失败: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -321,9 +349,15 @@ export default function ConsolePage(props: Props) {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
                                 <h4 className="text-base font-semibold text-ink truncate">{company.name}</h4>
-                                <span className={`rounded-full px-2 py-0.5 text-xs ${meta.bgColor} ${meta.color}`}>
-                                  {company.sourceCount} 网址
-                                </span>
+                                <select
+                                  value={company.company_type || "general"}
+                                  onChange={(e) => handleUpdateCompanyType(company.id, e.target.value)}
+                                  className={`rounded-full px-2 py-0.5 text-xs font-medium border-0 cursor-pointer ${meta.bgColor} ${meta.color}`}
+                                >
+                                  {companyTypeOptions.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  ))}
+                                </select>
                               </div>
                               <p className="mt-1 text-xs text-slate-500 truncate">{company.website}</p>
                             </div>

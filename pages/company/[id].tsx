@@ -23,6 +23,12 @@ export default function CompanyPage({ company, documents }: Props) {
         <title>{company.name} | Biz Insight MVP</title>
       </Head>
       <main className="mx-auto max-w-6xl px-6 py-10">
+        <a
+          href="/workbench"
+          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 mb-6"
+        >
+          ← 返回工作台
+        </a>
         <div className="rounded-[2rem] border border-white/60 bg-white/80 p-8 shadow-panel backdrop-blur">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>

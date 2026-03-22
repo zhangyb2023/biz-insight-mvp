@@ -23,6 +23,12 @@ export default function ReportPage({ company, documents }: Props) {
         <title>{company.name} Report</title>
       </Head>
       <main className="mx-auto max-w-4xl px-6 py-10">
+        <a
+          href="/workbench"
+          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 mb-6"
+        >
+          ← 返回工作台
+        </a>
         <section className="rounded-[2rem] border border-slate-200 bg-white p-10 shadow-panel">
           <p className="text-sm uppercase tracking-[0.3em] text-moss">PDF Report Source</p>
           <h1 className="mt-3 text-4xl font-semibold text-ink">{company.name} 商业洞察报告</h1>

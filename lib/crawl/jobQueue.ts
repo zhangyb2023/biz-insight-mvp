@@ -4,6 +4,9 @@ export interface CrawlJob {
   id: string;
   status: "pending" | "running" | "success" | "partial" | "failed";
   companyId?: string;
+  useCache?: boolean;
+  forceRefresh?: boolean;
+  cacheMaxAgeHours?: number;
   progress: { current: number; total: number; currentUrl?: string };
   result?: Awaited<ReturnType<typeof runCrawlJob>>;
   error?: string;
@@ -34,7 +37,10 @@ async function processJob(jobId: string): Promise<void> {
   try {
     const result = await runCrawlJob({
       companyId: job.companyId,
-      triggerType: "api"
+      triggerType: "api",
+      useCache: job.useCache ?? true,
+      forceRefresh: job.forceRefresh ?? false,
+      cacheMaxAgeHours: job.cacheMaxAgeHours ?? 24
     });
 
     job.result = result;
@@ -57,11 +63,14 @@ function dequeueNext(): void {
   }
 }
 
-export function enqueueCrawlJob(options: { companyId?: string }): CrawlJob {
+export function enqueueCrawlJob(options: { companyId?: string; useCache?: boolean; forceRefresh?: boolean; cacheMaxAgeHours?: number }): CrawlJob {
   const job: CrawlJob = {
     id: generateJobId(),
     status: "pending",
     companyId: options.companyId,
+    useCache: options.useCache,
+    forceRefresh: options.forceRefresh,
+    cacheMaxAgeHours: options.cacheMaxAgeHours,
     progress: { current: 0, total: 0 },
     createdAt: Date.now(),
     updatedAt: Date.now()

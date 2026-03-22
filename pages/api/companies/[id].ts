@@ -3,7 +3,7 @@ import path from "path";
 
 import type { NextApiRequest, NextApiResponse } from "next";
 
-import { loadCompanies, syncCompanies } from "@/lib/db/repository";
+import { loadCompanies, syncCompanies, updateCompanyTypeInDb } from "@/lib/db/repository";
 import type { CompanyRecord } from "@/lib/types";
 
 const companiesFile = path.join(process.cwd(), "data", "companies.json");
@@ -22,9 +22,9 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(400).json({ ok: false, error: "invalid_id", message: "公司 id 无效" });
   }
 
-  const body = req.body as { is_active?: boolean };
-  if (typeof body.is_active !== "boolean") {
-    return res.status(400).json({ ok: false, error: "invalid_payload", message: "当前仅支持更新 is_active" });
+  const body = req.body as { is_active?: boolean; company_type?: string };
+  if (typeof body.is_active !== "boolean" && typeof body.company_type !== "string") {
+    return res.status(400).json({ ok: false, error: "invalid_payload", message: "当前仅支持更新 is_active 或 company_type" });
   }
 
   if (id === "i-soft" && body.is_active === false) {
@@ -40,14 +40,19 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const nextCompanies = [...companies];
   nextCompanies[index] = {
     ...nextCompanies[index],
-    is_active: body.is_active
+    ...(typeof body.is_active === "boolean" && { is_active: body.is_active }),
+    ...(typeof body.company_type === "string" && { company_type: body.company_type })
   };
 
   writeCompanies(nextCompanies);
   syncCompanies(loadCompanies());
 
+  if (typeof body.company_type === "string") {
+    updateCompanyTypeInDb(id, body.company_type);
+  }
+
   return res.status(200).json({
     ok: true,
-    message: body.is_active ? "启用公司成功" : "停用公司成功"
+    message: "更新成功"
   });
 }

@@ -165,6 +165,11 @@ export function syncCompanies(companies: CompanyRecord[]) {
   bootstrapSourceRegistryFromCompanies(companies.filter(isConfigCompanyActive));
 }
 
+export function updateCompanyTypeInDb(companyId: string, companyType: string) {
+  const db = getDb();
+  db.prepare(`UPDATE companies SET company_type = ? WHERE id = ?`).run(companyType, companyId);
+}
+
 export function bootstrapSourceRegistryFromCompanies(companies: CompanyRecord[]) {
   const db = getDb();
   const registryStatement = db.prepare(`
@@ -617,12 +622,13 @@ export function getKeywordSets(companyId?: string) {
 
 export function getSourceManagerData() {
   const db = getDb();
-  const companies = db.prepare(`SELECT id, name, website, keywords, is_active > 0 as is_active FROM companies WHERE is_active = 1 ORDER BY name`).all() as unknown as Array<{
+  const companies = db.prepare(`SELECT id, name, website, keywords, is_active > 0 as is_active, company_type FROM companies WHERE is_active = 1 ORDER BY name`).all() as unknown as Array<{
     id: string;
     name: string;
     website: string;
     keywords: string;
     is_active: boolean;
+    company_type: string | null;
   }>;
   const sources = db.prepare(`
     SELECT sr.*
@@ -632,10 +638,23 @@ export function getSourceManagerData() {
     ORDER BY sr.company_id ASC, sr.priority ASC, sr.id ASC
   `).all() as SourceRegistryRecord[];
 
+  const lastCrawlMap = new Map<string, string>();
+  for (const company of companies) {
+    const lastCrawl = db.prepare(`
+      SELECT MAX(s.fetch_date) as last_fetch 
+      FROM sources s 
+      WHERE s.company_id = ? AND s.fetch_date IS NOT NULL
+    `).get(company.id) as { last_fetch: string | null } | undefined;
+    if (lastCrawl?.last_fetch) {
+      lastCrawlMap.set(company.id, lastCrawl.last_fetch);
+    }
+  }
+
   return {
     companies: companies.map((company) => ({
       ...company,
-      keywords: parseJson(company.keywords, [] as string[])
+      keywords: parseJson(company.keywords, [] as string[]),
+      lastCrawlAt: lastCrawlMap.get(company.id) || null
     })),
     sources: sources.map((source) => ({
       ...source,

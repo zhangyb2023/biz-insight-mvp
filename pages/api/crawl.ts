@@ -9,7 +9,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         ? String(req.body.companyId)
         : undefined;
 
-    const job = enqueueCrawlJob({ companyId });
+    const useCache = req.body?.useCache === undefined ? true : Boolean(req.body.useCache);
+    const forceRefresh = Boolean(req.body?.forceRefresh);
+    const cacheMaxAgeHours = typeof req.body?.cacheMaxAgeHours === "number" ? req.body.cacheMaxAgeHours : 24;
+
+    const job = enqueueCrawlJob({ companyId, useCache, forceRefresh, cacheMaxAgeHours });
 
     return res.status(202).json({
       ok: true,
