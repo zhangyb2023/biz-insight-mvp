@@ -14,7 +14,8 @@
     "urls": [
       "https://www.vector.com/",
       "https://www.vector.com/int/en/company/news/"
-    ]
+    ],
+    "company_type": "official"
   },
   {
     "id": "etas",
@@ -31,7 +32,8 @@
     "urls": [
       "https://www.etas.com/",
       "https://www.etas.com/ww/en/company/news-and-events/"
-    ]
+    ],
+    "company_type": "official"
   },
   {
     "id": "elektrobit",
@@ -49,7 +51,8 @@
       "https://www.elektrobit.com/",
       "https://www.elektrobit.com/newsroom/",
       "https://www.elektrobit.com/news/"
-    ]
+    ],
+    "company_type": "official"
   },
   {
     "id": "thundersoft",
@@ -67,7 +70,8 @@
       "https://www.thundersoft.com/",
       "https://www.thundersoft.com/category/newsroom/",
       "https://www.thundersoft.com/case/"
-    ]
+    ],
+    "company_type": "official"
   },
   {
     "id": "huawei-qiankun-auto",
@@ -85,7 +89,8 @@
       "https://intelligentautomotive.huawei.com/",
       "https://intelligentautomotive.huawei.com/cn/solutions/",
       "https://intelligentautomotive.huawei.com/cn/news/"
-    ]
+    ],
+    "company_type": "official"
   },
   {
     "id": "autosar",
@@ -138,7 +143,8 @@
     ],
     "urls": [
       "https://www.reachauto.com/"
-    ]
+    ],
+    "company_type": "official"
   },
   {
     "id": "neusar",
@@ -154,7 +160,8 @@
     ],
     "urls": [
       "https://www.neusar.com/"
-    ]
+    ],
+    "company_type": "official"
   },
   {
     "id": "hirain",
@@ -170,7 +177,8 @@
     ],
     "urls": [
       "https://www.hirain.com/"
-    ]
+    ],
+    "company_type": "official"
   },
   {
     "id": "denso",
@@ -186,7 +194,8 @@
     "urls": [
       "https://www.denso.com/",
       "https://www.denso.com/global/en/products-and-services/automotive/"
-    ]
+    ],
+    "company_type": "official"
   },
   {
     "id": "zeekr",
@@ -201,7 +210,8 @@
     ],
     "urls": [
       "https://www.zeekrlife.com/"
-    ]
+    ],
+    "company_type": "official"
   },
   {
     "id": "horizon-robotics",
@@ -218,7 +228,8 @@
     ],
     "urls": [
       "https://www.horizon.auto/"
-    ]
+    ],
+    "company_type": "official"
   },
   {
     "id": "black-sesame",
@@ -257,7 +268,8 @@
       "https://www.semidrive.com/news/corporate-news.html",
       "https://www.semidrive.com/news/ecological-cooperation.html",
       "https://www.semidrive.com/news/mass-production.html"
-    ]
+    ],
+    "company_type": "official"
   },
   {
     "id": "tttech-auto",
@@ -273,7 +285,8 @@
     ],
     "urls": [
       "https://www.tttech-auto.com/"
-    ]
+    ],
+    "company_type": "official"
   },
   {
     "id": "36kr-home",
@@ -290,8 +303,9 @@
       "智能驾驶",
       "电动车"
     ],
-    "is_active": true,
-    "type": "media"
+    "is_active": false,
+    "type": "media",
+    "company_type": "general"
   },
   {
     "id": "huxiu",
@@ -322,7 +336,8 @@
       "TMT"
     ],
     "is_active": true,
-    "type": "media"
+    "type": "media",
+    "company_type": "general"
   },
   {
     "id": "geekpark",
@@ -337,7 +352,8 @@
       "产品"
     ],
     "is_active": true,
-    "type": "media"
+    "type": "media",
+    "company_type": "general"
   },
   {
     "id": "autohome",
@@ -387,7 +403,8 @@
       "评测"
     ],
     "is_active": true,
-    "type": "media"
+    "type": "media",
+    "company_type": "media"
   },
   {
     "id": "sinaauto",
@@ -403,5 +420,18 @@
     ],
     "is_active": true,
     "type": "media"
+  },
+  {
+    "id": "盖世汽车",
+    "name": "盖世汽车",
+    "website": "https://auto.gasgoo.com/",
+    "is_active": true,
+    "keywords": [
+      "专业机构"
+    ],
+    "urls": [
+      "https://auto.gasgoo.com/"
+    ],
+    "company_type": "professional"
   }
 ]
