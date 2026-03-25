@@ -32,41 +32,39 @@ const CRAWL_STRATEGIES = [
 
 const INSIGHT_WORKFLOW = [
   {
-    phase: "数据采集",
-    icon: "🕷️",
+    phase: "原始数据",
+    icon: "📰",
     steps: [
-      { title: "策略匹配", desc: "根据URL自动匹配爬虫策略" },
-      { title: "页面抓取", desc: "Cheerio静态抓取 / Playwright动态渲染" },
-      { title: "内容提取", desc: "提取标题、日期、摘要、正文、链接" },
-      { title: "质量过滤", desc: "过滤低质量标题（Policy/Menu/空白等）" },
+      { title: "61条原始新闻", desc: "从12家目标公司官网抓取的原始信息" },
+      { title: "标题+摘要+日期+来源", desc: "每条包含：title, summary, date, company, url" },
     ]
   },
   {
-    phase: "LLM 分析",
+    phase: "质量过滤",
+    icon: "🧹",
+    steps: [
+      { title: "低质量标题过滤", desc: "过滤 Policy/Menu/Read more/空白标题" },
+      { title: "首页过滤", desc: "过滤 /index.html、列表页尾" },
+      { title: "格式化 CompactItem", desc: "统一字段格式，准备输入 LLM" },
+    ]
+  },
+  {
+    phase: "LLM 聚合",
     icon: "🤖",
     steps: [
-      { title: "输入处理", desc: "将原始数据格式化为 CompactItem" },
-      { title: "Prompt 构建", desc: "包含系统角色、输出格式强制要求、字段长度限制" },
-      { title: "DeepSeek 调用", desc: "temperature=0.3，强制JSON输出" },
-      { title: "容错解析", desc: "处理 ```json 代码块，提取 { } 区间内容" },
+      { title: "DeepSeek 分析", desc: "基于 Prompt 规则，将61条聚合成结构化判断" },
+      { title: "主题分类", desc: "产品技术/生态合作/战略动向/政策法规/人才动态" },
+      { title: "重要性排序", desc: "按证据强度和置信度排序" },
     ]
   },
   {
-    phase: "聚合洞察",
+    phase: "结构化输出",
     icon: "💡",
     steps: [
-      { title: "generate-brief API", desc: "聚合多源信息，输出 window_summary / top_changes / company_insights / phua_impacts / management_actions" },
-      { title: "范围过滤", desc: "按 company_ids 精确过滤，单公司报告独立生成" },
-      { title: "状态返回", desc: "ok + empty + reason 三元状态，前端明确展示" },
-    ]
-  },
-  {
-    phase: "报告生成",
-    icon: "📄",
-    steps: [
-      { title: "generate-report API", desc: "基于 brief_data 生成 Markdown 格式报告" },
-      { title: "报告类型", desc: "总览简报（全部公司）vs 观察简报（单公司）" },
-      { title: "报告结构", desc: "报告说明 → 执行摘要 → 重点变化 → 公司观察 → 对普华影响 → 管理动作 → 证据附录" },
+      { title: "window_summary", desc: "执行摘要：3件最值得关注的事" },
+      { title: "top_changes", desc: "重点变化：3-5条具体变化及影响" },
+      { title: "phua_impacts", desc: "对普华影响：竞争压力/合作机会/市场参考" },
+      { title: "management_actions", desc: "管理动作：谁做什么，为什么" },
     ]
   },
 ];
@@ -294,6 +292,168 @@ export default function OverviewPage() {
               <p className="text-xs text-slate-400 mt-3">
                 证据类型在 filteredItems useMemo 中通过 getEntityType() 判断，用于筛选不同类型的原始文档
               </p>
+            </div>
+          </section>
+
+          {/* 61条如何变成聚合洞察 */}
+          <section>
+            <h2 className="text-lg font-semibold text-ink mb-4">61条原始信息如何变成聚合洞察</h2>
+            <div className="rounded-2xl bg-white border border-slate-200 p-6 space-y-6">
+
+              {/* 第一步：数据来源 */}
+              <div className="border-l-4 border-sky-400 pl-4">
+                <h3 className="text-sm font-semibold text-ink mb-2">📰 第一步：原始数据（61条）</h3>
+                <p className="text-xs text-slate-600 mb-2">从12家目标公司官网抓取的原始信息，每条包含：</p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="px-2 py-1 rounded bg-slate-100 text-xs text-slate-600">title（标题）</span>
+                  <span className="px-2 py-1 rounded bg-slate-100 text-xs text-slate-600">summary（摘要）</span>
+                  <span className="px-2 py-1 rounded bg-slate-100 text-xs text-slate-600">date（日期）</span>
+                  <span className="px-2 py-1 rounded bg-slate-100 text-xs text-slate-600">company（公司）</span>
+                  <span className="px-2 py-1 rounded bg-slate-100 text-xs text-slate-600">url（链接）</span>
+                </div>
+                <p className="text-xs text-slate-500 mt-2 italic">示例：华为发布乾崑智能驾驶方案 | 2026-03-20 | 华为乾崑 | auto.huawei.com/...</p>
+              </div>
+
+              {/* 箭头 */}
+              <div className="flex justify-center">
+                <svg className="w-6 h-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </div>
+
+              {/* 第二步：质量过滤 */}
+              <div className="border-l-4 border-amber-400 pl-4">
+                <h3 className="text-sm font-semibold text-ink mb-2">🧹 第二步：质量过滤（61条 → 50条）</h3>
+                <p className="text-xs text-slate-600 mb-2">过滤低质量内容，保留有效信息：</p>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-400">✗</span>
+                    <span className="text-xs text-slate-600">Policy / Menu / Read more / 空白标题</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-400">✗</span>
+                    <span className="text-xs text-slate-600">/index.html、站点首页、列表页尾</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-emerald-400">✓</span>
+                    <span className="text-xs text-slate-600">保留：有实质内容的新闻、公告、发布</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 箭头 */}
+              <div className="flex justify-center">
+                <svg className="w-6 h-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </div>
+
+              {/* 第三步：LLM分析 */}
+              <div className="border-l-4 border-violet-400 pl-4">
+                <h3 className="text-sm font-semibold text-ink mb-2">🤖 第三步：DeepSeek LLM 分析</h3>
+                <p className="text-xs text-slate-600 mb-2">基于 Prompt 规则，对50条有效信息进行聚合分析：</p>
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <p className="text-xs font-medium text-slate-700 mb-1">主题分类</p>
+                    <p className="text-xs text-slate-500">判断每条属于：产品技术/生态合作/战略动向/政策法规/人才动态</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <p className="text-xs font-medium text-slate-700 mb-1">重要性排序</p>
+                    <p className="text-xs text-slate-500">按证据强度（completeness_score）和置信度排序</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <p className="text-xs font-medium text-slate-700 mb-1">聚合判断</p>
+                    <p className="text-xs text-slate-500">将同主题、同公司、相关事件的信息聚合</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <p className="text-xs font-medium text-slate-700 mb-1">结论边界</p>
+                    <p className="text-xs text-slate-500">单条证据说明"样本有限"，集中说明"主要由某公司驱动"</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 箭头 */}
+              <div className="flex justify-center">
+                <svg className="w-6 h-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </div>
+
+              {/* 第四步：结构化输出 */}
+              <div className="border-l-4 border-emerald-400 pl-4">
+                <h3 className="text-sm font-semibold text-ink mb-2">💡 第四步：结构化输出（5大模块）</h3>
+                <p className="text-xs text-slate-600 mb-3">LLM 输出的结构化洞察：</p>
+                
+                <div className="space-y-3">
+                  <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-bold text-emerald-700">window_summary</span>
+                      <span className="text-xs text-emerald-500">执行摘要</span>
+                    </div>
+                    <p className="text-xs text-emerald-600">→ 本期最值得关注的3件事 + 信号强度 + 边界说明</p>
+                    <p className="text-xs text-slate-500 mt-1 italic">"近30天产品技术信号最活跃（18次命中），行业关注点集中于此"</p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-bold text-blue-700">top_changes</span>
+                      <span className="text-xs text-blue-500">重点变化（3-5条）</span>
+                    </div>
+                    <p className="text-xs text-blue-600">→ 每条包含：标题 + 判断 + 重要性 + 对普华影响 + 建议动作</p>
+                    <p className="text-xs text-slate-500 mt-1 italic">"华为发布乾崑智能驾驶方案 → 需评估对基础软件兼容性需求"</p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-bold text-amber-700">phua_impacts</span>
+                      <span className="text-xs text-amber-500">对普华影响（三栏）</span>
+                    </div>
+                    <p className="text-xs text-amber-600">→ 竞争压力 / 合作机会 / 产品市场参考</p>
+                    <p className="text-xs text-slate-500 mt-1 italic">"中科创达座舱方案可能压缩普华在长安的项目机会"</p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-violet-50 border border-violet-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-bold text-violet-700">company_insights</span>
+                      <span className="text-xs text-violet-500">重点公司观察</span>
+                    </div>
+                    <p className="text-xs text-violet-600">→ 每公司：信号级别 + 核心动作 + 商业含义 + 对普华</p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-rose-50 border border-rose-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-bold text-rose-700">management_actions</span>
+                      <span className="text-xs text-rose-500">管理动作建议</span>
+                    </div>
+                    <p className="text-xs text-rose-600">→ 部门 + 具体动作 + 优先级 + 原因</p>
+                    <p className="text-xs text-slate-500 mt-1 italic">"建议市场/售前团队：尽快对接长安，了解智能驾驶方案选型计划，原因：华为已获长安量产定点"</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 证据链说明 */}
+              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                <h4 className="text-sm font-semibold text-ink mb-2">🔗 证据链：每条洞察都可追溯</h4>
+                <div className="space-y-2 text-xs text-slate-600">
+                  <div className="flex items-start gap-2">
+                    <span className="text-violet-500 font-bold">1.</span>
+                    <span><strong>原始数据</strong> → 12家公司官网发布的61条新闻（含标题、链接、日期）</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-violet-500 font-bold">2.</span>
+                    <span><strong>质量过滤</strong> → 过滤后保留50条有效信息（去除 Policy/Menu/首页等）</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-violet-500 font-bold">3.</span>
+                    <span><strong>LLM 聚合</strong> → DeepSeek 基于 Prompt 分析50条，输出结构化判断</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-violet-500 font-bold">4.</span>
+                    <span><strong>结果溯源</strong> → 用户可点击洞察卡片，查看对应原始新闻链接</span>
+                  </div>
+                </div>
+              </div>
+
             </div>
           </section>
 
