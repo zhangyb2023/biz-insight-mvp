@@ -32,3 +32,4 @@ Thumbs.db
 tsconfig.tsbuildinfo
 *.db
 sqlite-backup.tar.gz
+db/
