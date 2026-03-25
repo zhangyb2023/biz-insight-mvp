@@ -598,7 +598,7 @@ const handler: NextApiHandler = async (req, res) => {
 
     let brief: BriefResult;
 
-    if (providedBriefData && companyIds.length === 0) {
+    if (providedBriefData) {
       brief = normalizeResult(providedBriefData);
     } else {
       const apiKey = getApiKey();
