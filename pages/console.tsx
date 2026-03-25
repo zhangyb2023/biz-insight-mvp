@@ -67,8 +67,6 @@ export default function ConsolePage(props: Props) {
   const [companyLoading, setCompanyLoading] = useState(false);
   const [expandedCompanyId, setExpandedCompanyId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [disablingCompanyId, setDisablingCompanyId] = useState<string | null>(null);
-  const [restoringCompanyId, setRestoringCompanyId] = useState<string | null>(null);
 
   const companiesWithSources = useMemo(() => {
     return currentCompanies.map(company => {
@@ -99,10 +97,6 @@ export default function ConsolePage(props: Props) {
     });
     return groups;
   }, [companiesWithSources]);
-
-  const inactiveCompanies = useMemo(() => {
-    return currentCompanies.filter(c => c.is_active === false);
-  }, [currentCompanies]);
 
   async function handleCreateSource() {
     if (!selectedCompanyId || !url.trim()) {
@@ -163,6 +157,26 @@ export default function ConsolePage(props: Props) {
     }
   }
 
+  async function handleDeleteCompany(companyId: string, companyName: string) {
+    const confirmed = window.confirm(`确认删除公司"${companyName}"？删除后将同时删除该公司下的所有网址，且无法恢复！`);
+    if (!confirmed) return;
+
+    setMessage("");
+    try {
+      const res = await fetch(`/api/companies/${companyId}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setMessage(`删除失败: ${data.message || data.error || "未知错误"}`);
+        return;
+      }
+      setCurrentCompanies(prev => prev.filter(c => c.id !== companyId));
+      setCurrentSources(prev => prev.filter(s => s.company_id !== companyId));
+      setMessage(`删除成功（${data.deletedSources || 0}个网址已删除）`);
+    } catch (err) {
+      setMessage(`删除失败: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   async function handleCreateCompany() {
     if (!companyName.trim() || !companyWebsite.trim() || !companyKeywords.trim()) {
       setMessage("请填写公司名称、官网和关键词");
@@ -205,55 +219,6 @@ export default function ConsolePage(props: Props) {
       setMessage(`新增公司失败: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setCompanyLoading(false);
-    }
-  }
-
-  async function handleDisableCompany(companyId: string, companyNameValue: string) {
-    const confirmed = window.confirm(`确认停用公司对象"${companyNameValue}"？停用后将不会出现在工作台中。`);
-    if (!confirmed) return;
-
-    setDisablingCompanyId(companyId);
-    setMessage("");
-
-    try {
-      const res = await fetch(`/api/companies/${companyId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_active: false })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        setMessage(`停用失败: ${data.message || data.error || "未知错误"}`);
-        return;
-      }
-      setCurrentCompanies(prev => prev.map(c => c.id === companyId ? { ...c, is_active: false } : c));
-      setMessage("停用成功");
-    } catch (err) {
-      setMessage(`停用失败: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setDisablingCompanyId(null);
-    }
-  }
-
-  async function handleRestoreCompany(companyId: string) {
-    setRestoringCompanyId(companyId);
-    try {
-      const res = await fetch(`/api/companies/${companyId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_active: true })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        setMessage(`恢复失败: ${data.message || data.error || "未知错误"}`);
-        return;
-      }
-      setCurrentCompanies(prev => prev.map(c => c.id === companyId ? { ...c, is_active: true } : c));
-      setMessage("恢复成功");
-    } catch (err) {
-      setMessage(`恢复失败: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setRestoringCompanyId(null);
     }
   }
 
@@ -373,11 +338,10 @@ export default function ConsolePage(props: Props) {
                                 {isExpanded ? "收起" : "展开"}
                               </button>
                               <button
-                                onClick={() => handleDisableCompany(company.id, company.name)}
-                                disabled={disablingCompanyId === company.id}
-                                className="rounded-full border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                onClick={() => handleDeleteCompany(company.id, company.name)}
+                                className="rounded-full border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
                               >
-                                停用
+                                删除
                               </button>
                             </div>
                           </div>
@@ -424,29 +388,6 @@ export default function ConsolePage(props: Props) {
           })}
         </section>
 
-        {inactiveCompanies.length > 0 && (
-          <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-panel">
-            <h2 className="text-xl font-semibold text-ink">已停用 ({inactiveCompanies.length})</h2>
-            <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {inactiveCompanies.map(company => (
-                <article key={company.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-sm font-semibold text-ink truncate">{company.name}</h4>
-                    <p className="text-xs text-slate-500 truncate">{company.website}</p>
-                  </div>
-                  <button
-                    onClick={() => handleRestoreCompany(company.id)}
-                    disabled={restoringCompanyId === company.id}
-                    className="rounded-full bg-moss px-4 py-2 text-sm font-semibold text-white hover:bg-moss/90 disabled:opacity-50"
-                  >
-                    恢复
-                  </button>
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
-
         <section className="mt-8 rounded-3xl border border-dashed border-slate-300 bg-white p-6 shadow-panel">
           <h2 className="text-xl font-semibold text-ink">新增公司</h2>
           <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1.2fr_1.2fr_auto]">
@@ -486,7 +427,7 @@ export default function ConsolePage(props: Props) {
               onChange={e => setSelectedCompanyId(e.target.value)}
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm"
             >
-              {currentCompanies.filter(c => c.is_active !== false).map(c => (
+              {currentCompanies.filter(c => c.is_active === 1).map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>

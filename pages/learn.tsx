@@ -11,80 +11,80 @@ interface ApiStatus {
 
 const crawlTiers = [
   {
-    tier: "Tier 1",
-    name: "官方来源 (Official)",
+    tier: "策略模式",
+    name: "定制化爬取策略",
     color: "#2563eb",
     bgColor: "bg-blue-50",
     borderColor: "border-blue-200",
     textColor: "text-blue-700",
-    sources: "公司官网、官方新闻页、官方产品页",
-    strategy: "Jina Reader → Firecrawl → 日期过滤",
-    strategyDesc: "Jina优先提取 + Playwright补提日期 + 2026-01-01过滤门控",
-    successRate: "94%+",
-    dailyLimit: "10,000 请求/天 (Jina免费)",
-    flow: ["URL 输入", "Jina Reader 提取", "Playwright补提日期", "日期>=2026-01-01?", "通过 → 后续处理", "失败 → Firecrawl"]
+    sources: "各类网站（新闻列表、产品页面、博客等）",
+    strategy: "URL Pattern → 策略匹配 → Playwright/Cheerio解析",
+    strategyDesc: "每类网站有专属解析策略，自动提取标题/日期/摘要/链接",
+    successRate: "95%+",
+    dailyLimit: "无限制（自有Playwright）",
+    flow: ["URL 输入", "策略匹配", "Playwright渲染", "Cheerio解析", "LLM智能分类", "存入数据库"]
   },
   {
-    tier: "Tier 2",
-    name: "媒体来源 (Media)",
+    tier: "多页支持",
+    name: "自动翻页爬取",
     color: "#059669",
     bgColor: "bg-emerald-50",
     borderColor: "border-emerald-200",
     textColor: "text-emerald-700",
-    sources: "行业媒体、新闻门户、第三方资讯站",
-    strategy: "Jina Reader → Firecrawl → 日期过滤",
-    strategyDesc: "与官方来源相同策略，优先Jina + 日期门控",
+    sources: "分页新闻列表、博客归档、产品列表",
+    strategy: "策略 + 分页配置 → 自动翻页",
+    strategyDesc: "支持多种分页格式，自动爬取多页内容",
     successRate: "90%+",
-    dailyLimit: "10,000 请求/天 (Jina免费)",
-    flow: ["URL 输入", "Jina Reader 提取", "Playwright补提日期", "日期>=2026-01-01?", "通过 → 后续处理", "失败 → Firecrawl"]
+    dailyLimit: "无限制",
+    flow: ["首页URL", "检测分页", "翻页URL生成", "循环爬取", "合并结果"]
   },
   {
-    tier: "Tier 3",
-    name: "专业机构 (Professional)",
+    tier: "LLM 分类",
+    name: "智能内容分类",
     color: "#7c3aed",
     bgColor: "bg-violet-50",
     borderColor: "border-violet-200",
     textColor: "text-violet-700",
-    sources: "协会组织、研究机构、专业平台",
-    strategy: "Jina → Firecrawl → Tavily发现 + Jina提取 → Playwright日期 → 日期过滤",
-    strategyDesc: "三重降级 + Playwright JS渲染日期提取 + 2026-01-01门控",
-    successRate: "85%+",
-    dailyLimit: "Tavily: 1000请求/月 (dev key)",
-    flow: ["URL 输入", "Jina Reader 提取", "失败 → Firecrawl", "失败 → Tavily搜索发现", "Jina提取发现的URL", "Playwright补提日期", "日期>=2026-01-01?", "通过 → 后续处理"]
+    sources: "所有爬取的新闻/文章",
+    strategy: "DeepSeek → 语义理解 → 五类分类",
+    strategyDesc: "基于内容语义智能分类：产品技术/生态合作/战略动向/政策法规/人才动态",
+    successRate: "90%+",
+    dailyLimit: "API调用限制",
+    flow: ["提取标题+摘要", "发送DeepSeek", "语义分析", "分类判断", "返回结果"]
   }
 ];
 
 const fileStructure = [
   {
-    category: "核心爬取引擎",
+    category: "策略定义",
     files: [
-      { path: "lib/crawl/intelligentCrawl.ts", desc: "智能爬取核心模块，实现三层策略逻辑" },
-      { path: "lib/crawl/runCrawlJob.ts", desc: "爬取任务编排器，协调整个爬取流程" },
-      { path: "lib/crawl/playwrightCrawl.ts", desc: "Playwright 旧版爬取（已废弃）" },
-      { path: "lib/crawl/playwrightDateExtract.ts", desc: "Playwright 日期补提模块（JS渲染站专用）" },
-      { path: "lib/crawl/firecrawlCrawl.ts", desc: "Firecrawl 独立接口封装" }
+      { path: "lib/crawl/strategies/types.ts", desc: "策略类型定义（URL模式、提取项结构）" },
+      { path: "lib/crawl/strategies/index.ts", desc: "策略注册与匹配中心" },
+      { path: "lib/crawl/strategies/gasgooFlashStrategy.ts", desc: "盖世快讯策略（分页爬取）" },
+      { path: "lib/crawl/strategies/autosarNewsStrategy.ts", desc: "AUTOSAR新闻策略" },
+      { path: "lib/crawl/strategies/thundersoftNewsStrategy.ts", desc: "中科创达新闻策略" },
+      { path: "lib/crawl/strategies/huaweiAutoNewsStrategy.ts", desc: "华为乾崑新闻策略" },
+      { path: "lib/crawl/strategies/hirainNewsStrategy.ts", desc: "经纬恒润新闻策略" }
     ]
   },
   {
-    category: "内容处理",
+    category: "LLM 分类",
     files: [
-      { path: "lib/clean/cleanText.ts", desc: "正文清洗与列表提取" },
-      { path: "lib/analyze/deepSeek.ts", desc: "DeepSeek LLM 分析" },
-      { path: "lib/evaluate/sourceQuality.ts", desc: "来源质量评估" }
+      { path: "lib/crawl/llmClassifier.ts", desc: "DeepSeek 智能分类（产品技术/生态合作/战略动向/政策法规/人才动态）" }
+    ]
+  },
+  {
+    category: "API 接口",
+    files: [
+      { path: "pages/api/strategy/crawl.ts", desc: "策略爬取接口（爬取+LLM分类）" },
+      { path: "pages/api/all-items.ts", desc: "动态信息列表接口" }
     ]
   },
   {
     category: "数据层",
     files: [
       { path: "lib/db/repository.ts", desc: "数据库操作（SQLite）" },
-      { path: "lib/search/searchUrls.ts", desc: "URL 解析与搜索" }
-    ]
-  },
-  {
-    category: "配置文件",
-    files: [
-      { path: "~/.openclaw/credentials/tavily-api-key", desc: "Tavily API 密钥" },
-      { path: "~/.openclaw/credentials/firecrawl-api-key", desc: "Firecrawl API 密钥" }
+      { path: "lib/db/sqlite.ts", desc: "数据库连接管理" }
     ]
   }
 ];
@@ -92,32 +92,26 @@ const fileStructure = [
 const optimizationSuggestions = [
   {
     priority: "已完成",
-    title: "日期过滤逻辑",
-    desc: "2026-01-01后发布日期过滤：shouldRunLlm门控、URL日期预检、质量评分衰减",
+    title: "策略化爬取",
+    desc: "每类网站有专属解析策略，URL Pattern匹配，自动提取标题/日期/摘要/链接",
     effort: "已完成"
   },
   {
-    priority: "中",
-    title: "增强日期标准化",
-    desc: "将所有非ISO格式日期（英文、中文、斜杠）统一转换为ISO 8601格式，便于排序和筛选",
-    effort: "中"
+    priority: "已完成",
+    title: "LLM智能分类",
+    desc: "基于DeepSeek语义分析，自动分类：产品技术/生态合作/战略动向/政策法规/人才动态",
+    effort: "已完成"
   },
   {
-    priority: "中",
-    title: "添加缓存层 (Redis/Memory)",
-    desc: "对高频访问的 URL 添加本地缓存，减少 API 调用次数和延迟",
-    effort: "中"
+    priority: "低",
+    title: "低价值内容过滤",
+    desc: "节日活动、妇女节等信息可选择是否过滤不入库",
+    effort: "低"
   },
   {
     priority: "低",
     title: "失败重试机制",
     desc: "当前失败直接跳过，可增加 2-3 次指数退避重试，提升成功率",
-    effort: "中"
-  },
-  {
-    priority: "低",
-    title: "添加来源健康检查",
-    desc: "定期检查来源可用性，自动标记长时间失败的来源为 invalid",
     effort: "中"
   }
 ];
@@ -128,50 +122,33 @@ const coreModules = [
     file: "lib/crawl/intelligentCrawl.ts:31",
     desc: "Jina Reader 内容提取，支持 Markdown 格式返回，自动解析 Title/URL/PublishedTime/Content",
     params: "url: string",
-    returns: "JinaResult { title, url, content, publishedTime, error? }"
+    returns: "CrawlStrategyResult { success, page?, extractedItems?, error? }"
   },
   {
-    name: "firecrawlExtract()",
-    file: "lib/crawl/intelligentCrawl.ts:93",
-    desc: "Firecrawl API 备选提取，提供更强的反爬绕过能力",
+    name: "strategy.crawl()",
+    file: "lib/crawl/strategies/*.ts",
+    desc: "策略爬取主入口，Playwright渲染 + Cheerio解析，自动翻页",
+    params: "url: string, options?: { pages?: number[] }",
+    returns: "CrawlStrategyResult { page, extractedItems[], success, error? }"
+  },
+  {
+    name: "findStrategyForUrl()",
+    file: "lib/crawl/strategies/index.ts",
+    desc: "根据URL Pattern匹配对应策略",
     params: "url: string",
-    returns: "FirecrawlResult { title, content, url, publishedTime, error? }"
+    returns: "CrawlStrategy | null"
   },
   {
-    name: "tavilySearch()",
-    file: "lib/crawl/intelligentCrawl.ts:140",
-    desc: "Tavily 搜索 API，用于专业机构的内容发现",
-    params: "query: string, maxResults?: number",
-    returns: "TavilyResult[] { url, title, published_date, score }[]"
-  },
-  {
-    name: "playwrightDateExtract()",
-    file: "lib/crawl/playwrightDateExtract.ts",
-    desc: "Playwright 渲染提取专用模块，30+选择器遍历 + 正则兜底，解决JS站日期缺失问题",
-    params: "url: string, waitMs?: number",
-    returns: "PlaywrightDateResult { date, method, html, title, success }"
-  },
-  {
-    name: "intelligentCrawl()",
-    file: "lib/crawl/intelligentCrawl.ts:211",
-    desc: "智能爬取主入口，根据来源类型自动选择策略",
-    params: "url, sourceType, searchKeyword?, companyWebsite?",
-    returns: "IntelliCrawlResult { success, page?, method, error?, discoveredUrls? }"
-  },
-  {
-    name: "batchIntelligentCrawl()",
-    file: "lib/crawl/intelligentCrawl.ts:358",
-    desc: "批量智能爬取，带请求间隔控制",
-    params: "urls[], sourceType, searchKeyword?, companyWebsite?",
-    returns: "BatchCrawlResult { pages[], errors[], methods{} }"
+    name: "classifyItemsWithLLM()",
+    file: "lib/crawl/llmClassifier.ts",
+    desc: "DeepSeek LLM批量分类，5类分类（产品技术/生态合作/战略动向/政策法规/人才动态）",
+    params: "items: { id, title, summary }[]",
+    returns: "ClassifiedItem[] { id, title, category, reason? }[]"
   }
 ];
 
 export default function IntelligentCrawlDocPage() {
   const [apiStatus, setApiStatus] = useState<ApiStatus[]>([
-    { name: "Jina Reader", key: "检查中...", status: "unknown", message: "加载中..." },
-    { name: "Firecrawl", key: "检查中...", status: "unknown", message: "加载中..." },
-    { name: "Tavily", key: "检查中...", status: "unknown", message: "加载中..." },
     { name: "DeepSeek", key: "检查中...", status: "unknown", message: "加载中..." }
   ]);
   const [loading, setLoading] = useState(false);

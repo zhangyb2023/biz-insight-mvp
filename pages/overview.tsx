@@ -9,48 +9,35 @@ const STEPS = [
     details: [
       "在\"公司管理\"中添加目标公司",
       "配置要监控的网页URL",
-      "设置关键词（产品/合作/招聘等）"
+      "系统自动匹配爬取策略"
     ],
     module: "公司管理",
     moduleHref: "/console"
   },
   {
     step: 2,
-    name: "智能爬取",
+    name: "策略爬取",
     icon: "🕷️",
-    description: "自动抓取目标网页内容",
+    description: "根据网页特点定制化爬取",
     details: [
-      "Jina Reader → 读取网页正文",
-      "Firecrawl → 深度抓取结构化内容",
-      "Tavily → 补充搜索发现更多相关页面",
-      "自动识别并跳过已缓存的页面"
+      "每类网站有专属解析策略",
+      "Playwright渲染动态内容",
+      "自动提取标题、日期、摘要、链接",
+      "支持多页分页自动翻页"
     ],
     module: "工作台 / 智能爬虫系统",
     moduleHref: "/workbench"
   },
   {
     step: 3,
-    name: "正文清洗",
-    icon: "🧹",
-    description: "去除广告、导航栏等干扰内容",
-    details: [
-      "提取网页主体内容",
-      "过滤广告和无关元素",
-      "识别并提取发布日期",
-      "保留关键信息结构"
-    ],
-    module: "自动进行"
-  },
-  {
-    step: 4,
-    name: "AI 分析",
+    name: "LLM 分类",
     icon: "🤖",
-    description: "用大模型理解内容并分类",
+    description: "用大模型理解内容语义并分类",
     details: [
-      "DeepSeek 分析内容主题",
-      "判断是产品/合作/招聘还是其他",
-      "提取关键信息（公司/产品/时间）",
-      "评估内容质量和可信度"
+      "DeepSeek 智能分析每条内容",
+      "产品技术/生态合作/战略动向/政策法规/人才动态",
+      "基于内容语义而非关键词匹配",
+      "准确判断内容商业价值"
     ],
     module: "自动进行"
   },
@@ -89,17 +76,17 @@ const ARCHITECTURE = {
     {
       name: "数据来源层",
       color: "bg-sky-100 border-sky-300",
-      items: ["目标公司官网", "新闻媒体", "专业论坛", "招聘平台"]
+      items: ["目标公司官网", "新闻媒体", "行业资讯", "专业社区"]
     },
     {
-      name: "采集引擎层",
+      name: "策略爬取层",
       color: "bg-emerald-100 border-emerald-300",
-      items: ["Jina Reader", "Firecrawl", "Tavily", "Playwright"]
+      items: ["专属策略解析", "Playwright渲染", "自动翻页", "内容提取"]
     },
     {
-      name: "处理分析层",
+      name: "LLM分类层",
       color: "bg-amber-100 border-amber-300",
-      items: ["正文清洗", "关键词匹配", "LLM 分类", "质量评估"]
+      items: ["DeepSeek智能分类", "产品技术", "生态合作", "战略动向/政策法规/人才动态"]
     },
     {
       name: "存储层",
@@ -109,7 +96,7 @@ const ARCHITECTURE = {
     {
       name: "展示应用层",
       color: "bg-rose-100 border-rose-300",
-      items: ["商业洞察", "系统健康度", "工作台", "公司管理"]
+      items: ["动态信息列表", "系统健康度", "工作台", "公司管理"]
     }
   ]
 };

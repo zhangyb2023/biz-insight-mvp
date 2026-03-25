@@ -12,9 +12,21 @@ type InsightItem = {
   category: string | null;
   completeness_score: number | null;
   clean_text: string | null;
+  insight_event_type: string;
+  insight_importance_level: "" | "high" | "medium" | "low";
+  insight_evidence_strength: number | null;
+  insight_confidence: number | null;
+  insight_statement: string;
+  insight_why_it_matters: string;
+  insight_next_action: string;
+  insight_to_phua_relation: string[];
+  insight_topic_tags: string[];
+  insight_supporting_facts: string[];
+  insight_risk_note: string;
+  insight_updated_at: string | null;
 };
 
-type TimeRange = "7d" | "30d" | "month" | "all";
+type TimeRange = "7d" | "30d" | "90d";
 type ImpactLevel = "高" | "中" | "低";
 type ConfidenceLevel = "高" | "中" | "低";
 type TrendDirection = "上升" | "稳定" | "下降";
@@ -24,18 +36,18 @@ type EvidencePriority = "core" | "reference" | "low";
 const MIN_DATE = "2026-01-01";
 
 const TOPICS = [
-  { key: "product", label: "产品与方案", icon: "🚗" },
-  { key: "tech", label: "技术成熟度", icon: "⚙️" },
+  { key: "product_tech", label: "产品技术", icon: "🚗" },
   { key: "ecosystem", label: "生态合作", icon: "🤝" },
   { key: "strategy", label: "战略动向", icon: "🎯" },
-  { key: "market", label: "市场信号", icon: "📈" },
+  { key: "policy", label: "政策法规", icon: "📋" },
+  { key: "talent", label: "人才动态", icon: "👥" },
+  { key: "market", label: "行业动态", icon: "📡" },
 ];
 
 const TIME_RANGES: { key: TimeRange; label: string }[] = [
   { key: "7d", label: "近7天" },
   { key: "30d", label: "近30天" },
-  { key: "month", label: "本月" },
-  { key: "all", label: "全部" },
+  { key: "90d", label: "近90天" },
 ];
 
 const METRIC_DEFINITIONS = {
@@ -97,6 +109,13 @@ const LOW_VALUE_PATTERNS = [
   { pattern: /官网首页|站点首页|网站首页|入口页|导航页/i, reason: "站点首页类", priority: "low" },
   { pattern: /频道首页|栏目首页|分类首页|列表页$/i, reason: "频道首页类", priority: "low" },
   { pattern: /专题页|合集页|汇总页|精选/i, reason: "汇编内容", priority: "reference" },
+  { pattern: /^policy[\s\-_]*/i, reason: "系统菜单项", priority: "low" },
+  { pattern: /^menu[\s\-_]*/i, reason: "系统菜单项", priority: "low" },
+  { pattern: /^导航$/i, reason: "导航页", priority: "low" },
+  { pattern: /sidebar|侧边栏|页脚|footer|header/i, reason: "页面框架元素", priority: "low" },
+  { pattern: /^read more|^learn more|^click here|^more info/i, reason: "通用链接文字", priority: "low" },
+  { pattern: /^\s*$/, reason: "空白标题", priority: "low" },
+  { pattern: /copyright|©|版权所有|保留所有权利/i, reason: "版权信息", priority: "low" },
 ];
 
 function isSiteHomepage(url: string, title: string): boolean {
@@ -106,6 +125,19 @@ function isSiteHomepage(url: string, title: string): boolean {
   if (/^https?:\/\/[^/]+\/$/i.test(lowerUrl)) return true;
   if (/\/news\/$/i.test(lowerUrl) || /\/article\/$/i.test(lowerUrl)) return true;
   if (/首页$/.test(lowerTitle) && lowerTitle.length < 20) return true;
+  if (/\/(news|products|solutions|about|contact|company)\/$/i.test(lowerUrl)) return true;
+  if (title.length < 5) return true;
+  return false;
+}
+
+function isLowQualityTitle(title: string): boolean {
+  if (!title || title.trim().length < 5) return true;
+  const lower = title.toLowerCase().trim();
+  if (/^(policy[\s\-_]*|menu[\s\-_]*)/i.test(lower)) return true;
+  if (/^(导航|首页)$/.test(lower)) return true;
+  if (/^(read more|learn more|click here|more info)$/i.test(lower)) return true;
+  if (/^[\d\-\/\.]+$/.test(lower)) return true;
+  if (/(sidebar|侧边栏|页脚|footer|header)/i.test(title)) return true;
   return false;
 }
 
@@ -116,8 +148,7 @@ function getDateRange(key: TimeRange): { from: Date; to: Date } {
   switch (key) {
     case "7d": from.setDate(from.getDate() - 7); break;
     case "30d": from.setDate(from.getDate() - 30); break;
-    case "month": from.setDate(1); break;
-    case "all": from = new Date(MIN_DATE); break;
+    case "90d": from.setDate(from.getDate() - 90); break;
   }
   return { from, to };
 }
@@ -138,13 +169,41 @@ function formatDateFull(dateStr: string | null): string {
   } catch { return String(dateStr).slice(0, 16); }
 }
 
-function mapToTopic(category: string | null, insightType: string | null): string {
-  const cat = (category || insightType || "").toLowerCase();
-  if (cat.includes("product") || cat === "产品") return "product";
-  if (cat.includes("tech") || cat === "技术") return "tech";
-  if (cat.includes("ecosystem") || cat === "合作" || cat === "生态") return "ecosystem";
-  if (cat.includes("strategy") || cat === "战略") return "strategy";
-  if (cat.includes("news") || cat.includes("观察") || cat.includes("general")) return "market";
+function mapToTopic(item: InsightItem): string {
+  const topicTags = item.insight_topic_tags || [];
+  if (topicTags.length > 0) {
+    const firstTag = topicTags[0].toLowerCase();
+    if (firstTag.includes("product") || firstTag.includes("tech") || firstTag.includes("产品") || firstTag.includes("技术")) return "product_tech";
+    if (firstTag.includes("ecosystem") || firstTag.includes("合作") || firstTag.includes("生态")) return "ecosystem";
+    if (firstTag.includes("strategy") || firstTag.includes("战略动向")) return "strategy";
+    if (firstTag.includes("policy") || firstTag.includes("政策") || firstTag.includes("法规")) return "policy";
+    if (firstTag.includes("talent") || firstTag.includes("人才") || firstTag.includes("招聘")) return "talent";
+  }
+
+  const eventType = (item.insight_event_type || "").toLowerCase();
+  if (eventType) {
+    if (eventType.includes("product") || eventType.includes("tech") || eventType.includes("产品") || eventType.includes("技术")) return "product_tech";
+    if (eventType.includes("ecosystem") || eventType.includes("合作") || eventType.includes("生态")) return "ecosystem";
+    if (eventType.includes("strategy") || eventType.includes("战略动向")) return "strategy";
+    if (eventType.includes("policy") || eventType.includes("政策") || eventType.includes("法规")) return "policy";
+    if (eventType.includes("talent") || eventType.includes("人才") || eventType.includes("招聘")) return "talent";
+  }
+
+  const cat = ((item.category || item.insight_type || "") as string).toLowerCase();
+  const title = (item.title || "").toLowerCase();
+  const combined = (cat + " " + title).toLowerCase();
+  
+  if (combined.includes("产品技术") || combined.includes("产品发布") || combined.includes("技术发布") || 
+      combined.includes("新品发布") || combined.includes("产品升级") || combined.includes("技术升级") ||
+      combined.includes("解决方案") && combined.includes("发布")) return "product_tech";
+  if (combined.includes("生态合作") || combined.includes("战略合作") || combined.includes("合作伙伴") ||
+      combined.includes("合作签约") || combined.includes("联合")) return "ecosystem";
+  if (combined.includes("战略动向") || combined.includes("融资") || combined.includes("上市") ||
+      combined.includes("高管变动") || combined.includes("组织调整") || combined.includes("战略转型") ||
+      combined.includes("并购") || combined.includes("收购")) return "strategy";
+  if (combined.includes("政策法规") || combined.includes("法规") || combined.includes("标准") ||
+      combined.includes("认证") || combined.includes("监管")) return "policy";
+  if (combined.includes("人才动态") || combined.includes("招聘") || combined.includes("人才")) return "talent";
   return "market";
 }
 
@@ -182,6 +241,7 @@ function getEvidencePriority(item: InsightItem): EvidencePriority {
   const summary = (item.summary || "").toLowerCase();
   const combined = (title + " " + url + " " + summary).toLowerCase();
   if (isSiteHomepage(url, title)) return "low";
+  if (isLowQualityTitle(title)) return "low";
   for (const { pattern, priority } of LOW_VALUE_PATTERNS) {
     if (pattern.test(combined)) return priority as EvidencePriority;
   }
@@ -277,7 +337,7 @@ function generateRiskNote(item: InsightItem): string {
 }
 
 function generateNextAction(item: InsightItem): string {
-  const topic = mapToTopic(item.category, item.insight_type);
+  const topic = mapToTopic(item);
   const priority = getEvidencePriority(item);
   const title = item.title || "";
   const url = item.url || "";
@@ -352,27 +412,27 @@ function generateCoreJudgment(
     if (topRatio > 0.5) {
       judgments.push({
         type: "趋势",
-        text: `${timeRangeLabel}${topTopicLabel}信号最活跃（${topCount}条），行业关注点集中于此`
+        text: `${timeRangeLabel}${topTopicLabel}信号最活跃（${topCount}次标签命中），行业关注点集中于此`
       });
     } else {
       judgments.push({
         type: "趋势", 
-        text: `${timeRangeLabel}信号分布多元，${topTopicLabel}略多（${topCount}条），行业关注点相对分散`
+        text: `${timeRangeLabel}信号分布多元，${topTopicLabel}略多（${topCount}次标签命中），行业关注点相对分散`
       });
     }
     
     // 检测技术信号强度
-    const techCount = topicCounts.tech || 0;
+    const techCount = topicCounts.product_tech || 0;
     const techRatio = techCount / total;
     if (techRatio < 0.15 && total > 5) {
       judgments.push({
         type: "结构",
-        text: `技术成熟度信号偏弱（${techCount}条），公开信息仍以传播层内容为主`
+        text: `技术成熟度信号偏弱（${techCount}次），公开信息仍以传播层内容为主`
       });
     } else if (techRatio > 0.25) {
       judgments.push({
         type: "结构",
-        text: `技术成熟度信号较强(${techCount}条)，行业正处技术投入期`
+        text: `技术成熟度信号较强(${techCount}次)，行业正处技术投入期`
       });
     }
   }
@@ -435,12 +495,13 @@ function generateCoreJudgment(
 
 function generateChartConclusion(topicCounts: Record<string, number>): string {
   const total = Object.values(topicCounts).reduce((a, b) => a + b, 0);
-  if (total === 0) return "暂无数据";
-  const productRatio = (topicCounts.product || 0) / total;
-  const techRatio = (topicCounts.tech || 0) / total;
-  if (productRatio > 0.5) return `以"产品与方案"为主(${Math.round(productRatio * 100)}%)，技术信号偏弱(${Math.round(techRatio * 100)}%)——公开信息以传播层内容为主`;
-  if (techRatio > 0.3) return `技术信号较强(${Math.round(techRatio * 100)}%)，反映行业技术投入动态`;
-  return `信号分布相对均衡，产品(${Math.round(productRatio * 100)}%)为主`;
+  if (total === 0) return "暂无信号数据";
+  
+  const productTechRatio = (topicCounts.product_tech || 0) / total;
+  const ecosystemRatio = (topicCounts.ecosystem || 0) / total;
+  if (productTechRatio > 0.5) return `以"产品技术"为主(${Math.round(productTechRatio * 100)}%)，技术信号偏弱——公开信息以传播层内容为主`;
+  if (ecosystemRatio > 0.4) return `以"生态合作"为主(${Math.round(ecosystemRatio * 100)}%)，本期行业重点在生态布局`;
+  return `信号分布相对均衡，产品技术(${Math.round(productTechRatio * 100)}%)为主`;
 }
 
 function isValidItem(item: InsightItem): boolean {
@@ -586,7 +647,7 @@ function TopicCard({ topic, count, trend, isActive, onClick }: {
       </div>
       <p className="font-medium text-ink text-sm">{topic.label}</p>
       <p className="text-2xl font-bold text-moss mt-1">{count}</p>
-      <p className="text-xs text-slate-500">条信号</p>
+      <p className="text-xs text-slate-500">次标签命中</p>
     </button>
   );
 }
@@ -721,6 +782,112 @@ export default function InsightsPage() {
   } | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
 
+  // Markdown 下载状态
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  // 公司筛选状态
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
+
+  // 可选公司列表 (company_id -> name)
+  const COMPANY_OPTIONS: { id: string; name: string }[] = [
+    { id: "vector", name: "Vector" },
+    { id: "elektrobit", name: "Elektrobit" },
+    { id: "tttech-auto", name: "TTTech Auto" },
+    { id: "hirain", name: "经纬恒润" },
+    { id: "reachauto", name: "东软睿驰" },
+    { id: "thundersoft", name: "中科创达" },
+    { id: "huawei-qiankun-auto", name: "华为乾崑" },
+    { id: "semi-drive", name: "芯驰科技" },
+    { id: "black-sesame", name: "黑芝麻智能" },
+    { id: "etas", name: "ETAS" },
+    { id: "autosar", name: "AUTOSAR" },
+    { id: "盖世汽车", name: "盖世汽车" },
+  ];
+
+  // 聚合洞察状态
+  const [briefData, setBriefData] = useState<{
+    window_summary: {
+      time_window: string;
+      overall_judgement: string;
+      signal_density: string;
+      manager_note: string;
+    };
+    top_changes: Array<{
+      title: string;
+      judgement: string;
+      why_important: string;
+      affected_companies: string[];
+      related_topics: string[];
+      to_phua_impact: string;
+      recommended_action: string;
+      evidence_count: number;
+    }>;
+    company_insights: Array<{
+      company: string;
+      signal_level: string;
+      main_move: string;
+      business_meaning: string;
+      to_phua_impact: string;
+      watch_next: string;
+    }>;
+    phua_impacts: {
+      competition_pressure: string[];
+      cooperation_opportunities: string[];
+      product_market_reference: string[];
+    };
+    management_actions: Array<{
+      department: string;
+      action: string;
+      priority: string;
+      reason: string;
+    }>;
+  } | null>(null);
+  const [briefLoading, setBriefLoading] = useState(true);
+  const [briefError, setBriefError] = useState<string | null>(null);
+  const [briefEmpty, setBriefEmpty] = useState(false);
+
+  // 调用 generate-brief API
+  useEffect(() => {
+    const windowDaysMap: Record<TimeRange, number> = {
+      "7d": 7,
+      "30d": 30,
+      "90d": 90
+    };
+    const windowDays = windowDaysMap[timeRange];
+
+    setBriefLoading(true);
+    setBriefError(null);
+    setBriefEmpty(false);
+    setBriefData(null);
+
+    fetch("/api/insights/generate-brief", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        window_days: windowDays, 
+        limit: 50,
+        company_ids: selectedCompanyIds.length > 0 ? selectedCompanyIds : undefined
+      })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.ok) {
+          setBriefData(data.result);
+          setBriefEmpty(data.empty === true);
+        } else {
+          setBriefError("聚合洞察生成失败");
+          setBriefEmpty(false);
+        }
+      })
+      .catch(err => {
+        setBriefError("网络异常，请检查网络连接");
+        setBriefEmpty(false);
+      })
+      .finally(() => {
+        setBriefLoading(false);
+      });
+  }, [timeRange, selectedCompanyIds]);
+
   useEffect(() => {
     fetch("/api/all-items")
       .then((res) => res.json())
@@ -734,7 +901,6 @@ export default function InsightsPage() {
   const validItems = useMemo(() => items.filter(isValidItem), [items]);
 
   const filteredByTime = useMemo(() => {
-    if (timeRange === "all") return validItems;
     const { from, to } = getDateRange(timeRange);
     return validItems.filter(item => {
       const d = new Date(item.published_at || item.fetch_date);
@@ -748,13 +914,13 @@ export default function InsightsPage() {
       result = result.filter(item => getEvidencePriority(item) !== "low");
     }
     if (activeTopic !== "all") {
-      result = result.filter(item => mapToTopic(item.category, item.insight_type) === activeTopic);
+      result = result.filter(item => mapToTopic(item) === activeTopic);
     }
     if (coreOnly) {
       result = result.filter(item => getEvidencePriority(item) === "core" || (item.completeness_score || 0) >= 0.75);
     }
     if (impactScope !== "all") {
-      result = result.filter(item => mapToTopic(item.category, item.insight_type) === impactScope);
+      result = result.filter(item => mapToTopic(item) === impactScope);
     }
     if (evidenceType !== "all") {
       result = result.filter(item => {
@@ -791,7 +957,7 @@ export default function InsightsPage() {
   const topicCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     filteredByTime.forEach(item => {
-      const topic = mapToTopic(item.category, item.insight_type);
+      const topic = mapToTopic(item);
       counts[topic] = (counts[topic] || 0) + 1;
     });
     return counts;
@@ -821,7 +987,7 @@ export default function InsightsPage() {
   const insightCards = useMemo((): InsightCardData[] =>
     filteredItems.map((item, idx) => ({
       id: `${item.url}-${idx}`,
-      topic: mapToTopic(item.category, item.insight_type),
+      topic: mapToTopic(item),
       title: item.title || "无标题",
       judgment: generateJudgment(item),
       businessImplication: generateBusinessImplication(item),
@@ -877,7 +1043,7 @@ export default function InsightsPage() {
 
       const topicStats: Record<string, { count: number; trend: string; insight: string }> = {};
       TOPICS.slice(1).forEach(t => {
-        const topicItems = filteredItems.filter(item => mapToTopic(item.category, item.insight_type) === t.key);
+        const topicItems = filteredItems.filter(item => mapToTopic(item) === t.key);
         topicStats[t.label] = {
           count: topicItems.length,
           trend: topicItems.length >= 5 ? "上升" : topicItems.length >= 2 ? "稳定" : "下降",
@@ -960,6 +1126,56 @@ export default function InsightsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleDownloadBriefMarkdown = async () => {
+    setIsDownloading(true);
+    try {
+      const windowDaysMap: Record<TimeRange, number> = { "7d": 7, "30d": 30, "90d": 90 };
+      const windowDays = windowDaysMap[timeRange];
+      const companyIds = selectedCompanyIds.length > 0 ? selectedCompanyIds : undefined;
+
+      const requestBody: any = {
+        window_days: windowDays,
+        format: "markdown"
+      };
+      if (companyIds) {
+        requestBody.company_ids = companyIds;
+      }
+      if (briefData) {
+        requestBody.brief_data = briefData;
+      }
+
+      const response = await fetch("/api/insights/generate-report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        throw new Error("报告生成失败");
+      }
+
+      const data = await response.json();
+      if (!data.ok) {
+        throw new Error(data.error || "报告生成失败");
+      }
+
+      const blob = new Blob([data.markdown], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${data.title}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "下载失败";
+      alert(`报告下载失败: ${msg}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <>
       <Head><title>商业洞察 | Biz Insight</title></Head>
@@ -987,6 +1203,16 @@ export default function InsightsPage() {
                   </button>
                 ))}
               </div>
+              <select
+                value={selectedCompanyIds[0] || ""}
+                onChange={e => setSelectedCompanyIds(e.target.value ? [e.target.value] : [])}
+                className="rounded border border-slate-200 bg-white px-3 py-1.5 text-xs focus:border-moss focus:outline-none"
+              >
+                <option value="">全部公司</option>
+                {COMPANY_OPTIONS.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
               <button
                 onClick={() => setShowReportModal(true)}
                 className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-2 text-sm font-medium text-white shadow-sm hover:from-emerald-700 hover:to-emerald-600 transition-all"
@@ -996,15 +1222,271 @@ export default function InsightsPage() {
                 </svg>
                 生成洞察报告
               </button>
+              <button
+                onClick={handleDownloadBriefMarkdown}
+                disabled={isDownloading}
+                title={selectedCompanyIds.length === 1 ? `下载${COMPANY_OPTIONS.find(c => c.id === selectedCompanyIds[0])?.name || '该公司'}的观察报告` : "下载全部公司的总览报告"}
+                className="flex items-center gap-2 rounded-lg border border-violet-200 bg-white px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50 transition-all"
+              >
+                {isDownloading ? (
+                  <>
+                    <span className="h-4 w-4 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin" />
+                    生成中...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    下载 Markdown 报告
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </header>
 
         <div className="mx-auto max-w-6xl px-6 py-6 space-y-6">
-          <div className="flex items-center justify-center text-center">
-            <p className="text-sm text-slate-500">建议先看"核心判断"，再看"重点主题"，最后查看下方具体洞察。</p>
-          </div>
-          <p className="text-xs text-slate-400 text-center -mt-2">适合用于业务研判、对象跟踪和汇报前准备。</p>
+
+          {/* LLM聚合洞察区 - 洞察优先 */}
+          {briefLoading ? (
+            <section className="rounded-xl bg-gradient-to-r from-violet-500 to-violet-600 p-6 text-white">
+              <div className="flex items-center justify-center py-8">
+                <div className="text-center">
+                  <div className="h-8 w-8 mx-auto border-4 border-white/30 border-t-white rounded-full animate-spin mb-3" />
+                  <p className="text-sm opacity-80">正在生成聚合洞察...</p>
+                  <p className="text-xs opacity-60 mt-1">
+                    {selectedCompanyIds.length === 1 
+                      ? `${COMPANY_OPTIONS.find(c => c.id === selectedCompanyIds[0])?.name || selectedCompanyIds[0]} · ${timeRangeLabel}`
+                      : `全部公司 · ${timeRangeLabel}`}
+                  </p>
+                </div>
+              </div>
+            </section>
+          ) : briefError ? (
+            <section className="rounded-xl bg-red-50 border border-red-200 p-6">
+              <div className="text-center">
+                <p className="text-sm text-red-600 mb-2">⚠️ 聚合洞察暂未生成成功</p>
+                <p className="text-xs text-slate-500 mb-3">请稍后重试，下方统计洞察仍可正常查看。</p>
+                <div className="inline-flex items-center gap-4 text-xs text-slate-400 bg-white px-4 py-2 rounded-lg border border-slate-200">
+                  <span>📅 {timeRangeLabel}</span>
+                  <span>🏢 {selectedCompanyIds.length === 1 ? (COMPANY_OPTIONS.find(c => c.id === selectedCompanyIds[0])?.name || "单公司") : "全部公司"}</span>
+                </div>
+                <p className="text-xs text-slate-400 mt-3">原始动态列表仍可正常查看</p>
+              </div>
+            </section>
+          ) : briefEmpty ? (
+            <section className="rounded-xl bg-slate-100 border border-slate-200 p-6">
+              <div className="text-center py-4">
+                <p className="text-sm text-slate-600 mb-2">📭 暂无足够聚合样本</p>
+                <p className="text-xs text-slate-500 mb-3">当前时间窗内高质量动态样本不足，已保留下方原始动态列表供查看</p>
+                <div className="inline-flex items-center gap-4 text-xs text-slate-400 bg-white px-4 py-2 rounded-lg border border-slate-200">
+                  <span>📅 {timeRangeLabel}</span>
+                  <span>🏢 {selectedCompanyIds.length === 1 ? (COMPANY_OPTIONS.find(c => c.id === selectedCompanyIds[0])?.name || "单公司") : "全部公司"}</span>
+                  <span>📊 {filteredItems.length}条动态</span>
+                </div>
+              </div>
+            </section>
+          ) : briefData ? (
+            <>
+              {/* 范围提示头 */}
+              <div className="flex items-center justify-center gap-4 text-xs text-slate-600 bg-slate-50 rounded-lg px-4 py-2 border border-slate-200">
+                <span className="flex items-center gap-1">
+                  <span>📅</span> {timeRangeLabel}
+                </span>
+                <span className="text-slate-300">|</span>
+                <span className="flex items-center gap-1">
+                  <span>🏢</span> {selectedCompanyIds.length === 1 ? (COMPANY_OPTIONS.find(c => c.id === selectedCompanyIds[0])?.name || "单公司") : "全部公司"}
+                </span>
+                <span className="text-slate-300">|</span>
+                <span className="flex items-center gap-1">
+                  <span>📊</span> {filteredItems.length}条动态
+                </span>
+              </div>
+              {/* 核心判断卡 */}
+              {briefData.window_summary.overall_judgement && (
+                <section className="rounded-xl bg-gradient-to-r from-slate-700 to-slate-600 border border-slate-500 p-6 text-white">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-lg">🎯</span>
+                    <h3 className="text-sm font-semibold">本期核心判断</h3>
+                    {briefData.window_summary.signal_density && (
+                      <span className={`ml-2 text-xs px-2 py-0.5 rounded ${
+                        briefData.window_summary.signal_density === "high" ? "bg-emerald-500/30 text-emerald-300" :
+                        briefData.window_summary.signal_density === "medium" ? "bg-amber-500/30 text-amber-300" :
+                        "bg-slate-500/30 text-slate-300"
+                      }`}>
+                        信号强度: {briefData.window_summary.signal_density === "high" ? "高" : briefData.window_summary.signal_density === "medium" ? "中" : "低"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm leading-relaxed text-slate-100 mb-3">
+                    {briefData.window_summary.overall_judgement}
+                  </p>
+                  {briefData.window_summary.manager_note && (
+                    <p className="text-xs text-slate-300">
+                      {briefData.window_summary.manager_note}
+                    </p>
+                  )}
+                </section>
+              )}
+
+              {/* 重点变化 */}
+              {briefData.top_changes.length > 0 && (
+                <section className="rounded-xl bg-white border border-slate-200 p-5">
+                  <h3 className="text-sm font-semibold text-ink mb-3 flex items-center gap-2">
+                    <span>📌</span> 本期重点变化
+                  </h3>
+                  <div className="space-y-4">
+                    {briefData.top_changes.slice(0, 5).map((change, idx) => (
+                      <div key={idx} className="border-l-4 border-violet-400 pl-4 space-y-2">
+                        <p className="text-sm font-medium text-ink">{change.title}</p>
+                        {change.judgement && (
+                          <p className="text-xs text-slate-600">{change.judgement}</p>
+                        )}
+                        {change.why_important && (
+                          <p className="text-xs text-amber-700 bg-amber-50 px-2 py-1 rounded">
+                            💡 为什么重要：{change.why_important}
+                          </p>
+                        )}
+                        {change.to_phua_impact && (
+                          <p className="text-xs text-violet-600 font-medium">
+                            → 对普华影响：{change.to_phua_impact}
+                          </p>
+                        )}
+                        {change.recommended_action && (
+                          <p className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+                            ✅ 建议动作：{change.recommended_action}
+                          </p>
+                        )}
+                        {change.affected_companies.length > 0 && (
+                          <p className="text-xs text-slate-400">
+                            涉及公司：{change.affected_companies.join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* 对普华影响 + 管理动作 - 三栏布局 */}
+              {(briefData.phua_impacts.competition_pressure.length > 0 ||
+                briefData.phua_impacts.cooperation_opportunities.length > 0 ||
+                briefData.phua_impacts.product_market_reference.length > 0 ||
+                briefData.management_actions.length > 0) && (
+                <section className="grid gap-4 md:grid-cols-3">
+                  {briefData.phua_impacts.competition_pressure.length > 0 && (
+                    <div className="rounded-xl bg-red-50 border border-red-200 p-4">
+                      <h4 className="text-xs font-semibold text-red-700 mb-2">⚔️ 竞争压力</h4>
+                      <ul className="space-y-1">
+                        {briefData.phua_impacts.competition_pressure.map((item, idx) => (
+                          <li key={idx} className="text-xs text-red-800">{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {briefData.phua_impacts.cooperation_opportunities.length > 0 && (
+                    <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4">
+                      <h4 className="text-xs font-semibold text-emerald-700 mb-2">🤝 合作机会</h4>
+                      <ul className="space-y-1">
+                        {briefData.phua_impacts.cooperation_opportunities.map((item, idx) => (
+                          <li key={idx} className="text-xs text-emerald-800">{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {briefData.phua_impacts.product_market_reference.length > 0 && (
+                    <div className="rounded-xl bg-blue-50 border border-blue-200 p-4">
+                      <h4 className="text-xs font-semibold text-blue-700 mb-2">📊 产品市场参考</h4>
+                      <ul className="space-y-1">
+                        {briefData.phua_impacts.product_market_reference.map((item, idx) => (
+                          <li key={idx} className="text-xs text-blue-800">{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {/* 管理动作建议 */}
+              {briefData.management_actions.length > 0 && (
+                <section className="rounded-xl bg-white border border-slate-200 p-5">
+                  <div className="mb-4">
+                    <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
+                      <span>📋</span> 管理动作建议
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">基于近30天信号生成，按"建议动作 + 依据说明"展示</p>
+                  </div>
+                  <div className="space-y-4">
+                    {briefData.management_actions.slice(0, 5).map((action, idx) => (
+                      <div key={idx} className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                        <div className="flex items-start gap-3">
+                          <span className={`flex-shrink-0 text-xs font-medium px-2 py-1 rounded ${
+                            action.priority === "high" ? "bg-red-100 text-red-700" :
+                            action.priority === "medium" ? "bg-amber-100 text-amber-700" :
+                            "bg-slate-200 text-slate-600"
+                          }`}>
+                            {action.department}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-800 leading-relaxed">{action.action}</p>
+                            {action.reason && (
+                              <p className="text-xs text-slate-500 mt-2 leading-relaxed">{action.reason}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* 重点公司观察 */}
+              {briefData.company_insights.length > 0 && (
+                <section className="rounded-xl bg-white border border-slate-200 p-5">
+                  <h3 className="text-sm font-semibold text-ink mb-3 flex items-center gap-2">
+                    <span>🏢</span> 重点公司观察
+                  </h3>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {briefData.company_insights.slice(0, 6).map((insight, idx) => (
+                      <div key={idx} className="border border-slate-100 rounded-lg p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-ink">{insight.company}</span>
+                          {insight.signal_level && (
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${
+                              insight.signal_level === "high" ? "bg-red-100 text-red-700" :
+                              insight.signal_level === "medium" ? "bg-amber-100 text-amber-700" :
+                              "bg-slate-100 text-slate-700"
+                            }`}>
+                              {insight.signal_level === "high" ? "高信号" : insight.signal_level === "medium" ? "中信号" : "低信号"}
+                            </span>
+                          )}
+                        </div>
+                        {insight.main_move && (
+                          <div>
+                            <span className="text-xs font-medium text-violet-600">● 核心动作</span>
+                            <p className="text-xs text-slate-700 mt-0.5">{insight.main_move}</p>
+                          </div>
+                        )}
+                        {insight.business_meaning && (
+                          <div>
+                            <span className="text-xs font-medium text-amber-600">● 商业含义</span>
+                            <p className="text-xs text-slate-600 mt-0.5">{insight.business_meaning}</p>
+                          </div>
+                        )}
+                        {insight.to_phua_impact && (
+                          <div className="bg-violet-50 rounded p-2">
+                            <span className="text-xs font-medium text-violet-700">● 对普华影响</span>
+                            <p className="text-xs text-violet-700 mt-0.5">{insight.to_phua_impact}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          ) : null}
 
           <section className="grid gap-4 md:grid-cols-4">
             <div className="rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 p-5 text-white">
@@ -1098,7 +1580,12 @@ export default function InsightsPage() {
                 />
               ))}
             </div>
-            <p className="text-xs text-slate-400 mt-2">* 主题信号为多标签统计，同一洞察可计入多个主题</p>
+            <div className="bg-slate-50 rounded-lg px-4 py-2 border border-slate-200">
+              <p className="text-xs text-slate-500">
+                <span className="font-medium text-slate-700">统计口径说明：</span>
+                上方数字为去重后的洞察条数；下方为主题标签命中次数，同一洞察可命中多个主题，两者口径不同。
+              </p>
+            </div>
           </section>
 
           <section className="grid gap-4 lg:grid-cols-3">

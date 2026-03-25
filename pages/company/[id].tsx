@@ -1,7 +1,6 @@
 import Head from "next/head";
 import type { GetServerSideProps } from "next";
 
-import { InsightList } from "@/components/InsightList";
 import { getCompanyDetails, loadCompanies, syncCompanies } from "@/lib/db/repository";
 
 type Props = NonNullable<ReturnType<typeof getCompanyDetails>>;
@@ -61,46 +60,42 @@ export default function CompanyPage({ company, documents }: Props) {
         </div>
 
         <section className="mt-8 rounded-[2rem] border border-white/60 bg-white/80 p-8 shadow-panel backdrop-blur">
-          <h2 className="text-2xl font-semibold text-ink">抓取效果预览</h2>
-          <div className="mt-6 space-y-6">
-            {documents.slice(0, 3).map((document) => (
-              <article key={`preview-${document.id}`} className="rounded-3xl border border-slate-100 bg-sand/60 p-5">
-                <div className="flex items-center justify-between gap-4">
-                  <h3 className="text-lg font-semibold text-ink">{document.title}</h3>
-                  <a className="text-sm font-medium" href={document.url} target="_blank" rel="noreferrer">
-                    原文
-                  </a>
-                </div>
-                <p className="mt-3 text-sm leading-7 text-slate-700">{document.clean_text.slice(0, 420)}...</p>
-                {document.extracted_items?.length ? (
-                  <div className="mt-4 space-y-3">
-                    {document.extracted_items.slice(0, 3).map((item, index) => (
-                      <div key={`${document.id}-${index}`} className="rounded-2xl bg-white px-4 py-3">
-                        <div className="flex items-center justify-between gap-4">
-                          <p className="font-medium text-ink">{item.title}</p>
-                          {item.date ? <span className="text-xs text-slate-500">{item.date}</span> : null}
-                        </div>
-                        {item.summary ? <p className="mt-2 text-sm text-slate-600">{item.summary}</p> : null}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </article>
-            ))}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-semibold text-ink">动态信息列表</h2>
+            <span className="text-sm text-slate-500">
+              共 {documents.reduce((sum, d) => sum + ((d.extracted_items?.length) || 0), 0)} 条
+            </span>
           </div>
-        </section>
-
-        <section className="mt-8">
-          <InsightList
-            items={documents.map((document) => ({
-              title: document.title,
-              url: document.url,
-              fetch_date: document.fetch_date,
-              summary: document.summary,
-              insight_type: document.insight_type,
-              category: document.category
-            }))}
-          />
+          
+          <div className="space-y-3">
+            {documents.flatMap((document) =>
+              (document.extracted_items || []).map((item, index) => (
+                <div key={`${document.id}-item-${index}`} className="rounded-2xl bg-white px-4 py-3 hover:bg-slate-50">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <p className="font-medium text-ink">{item.title}</p>
+                      {item.summary ? (
+                        <p className="mt-1 text-sm text-slate-600 line-clamp-2">{item.summary}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {item.date ? <span className="text-xs text-slate-500">{item.date}</span> : null}
+                      {item.url ? (
+                        <a 
+                          href={item.url} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="text-xs text-moss hover:underline"
+                        >
+                          原文
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </section>
       </main>
     </>

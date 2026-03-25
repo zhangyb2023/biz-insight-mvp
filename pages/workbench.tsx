@@ -5,6 +5,85 @@ import { useMemo, useState, useCallback, useRef } from "react";
 import { formatShanghaiDateTime } from "@/lib/format";
 import { getSourceManagerData } from "@/lib/db/repository";
 
+const STRATEGY_PATTERNS: { name: string; displayName: string; patterns: RegExp[] }[] = [
+  {
+    name: "gasgoo_flash",
+    displayName: "盖世快讯",
+    patterns: [/auto\.gasgoo\.com\/newsflash\/flashnews/i]
+  },
+  {
+    name: "autosar_news",
+    displayName: "AUTOSAR新闻",
+    patterns: [/www\.autosar\.org\/news-events/i]
+  },
+  {
+    name: "thundersoft_news",
+    displayName: "中科创达新闻",
+    patterns: [/www\.thundersoft\.com\/category\/newsroom/i]
+  },
+  {
+    name: "huawei_auto_news",
+    displayName: "华为乾崑新闻",
+    patterns: [/auto\.huawei\.com\/cn\/news/i]
+  },
+  {
+    name: "hirain_news",
+    displayName: "经纬恒润新闻",
+    patterns: [/www\.hirain\.com\/news\/企业新闻/i, /www\.hirain\.com\/news\/%E4%BC%81%E4%B8%9A%E6%96%B0%E9%97%BB/i]
+  },
+  {
+    name: "reachauto_news",
+    displayName: "东软睿驰新闻",
+    patterns: [
+      /www\.reachauto\.com\/corporate-news\/industry-activities/i,
+      /www\.reachauto\.com\/corporate-news\/ecological-alliance/i,
+      /www\.reachauto\.com\/corporate-news\/product-technology/i
+    ]
+  },
+  {
+    name: "etas_news",
+    displayName: "ETAS新闻",
+    patterns: [
+      /www\.etas\.com\/ww\/en\/about-etas\/newsroom/i
+    ]
+  },
+  {
+    name: "vector_news",
+    displayName: "Vector活动",
+    patterns: [
+      /www\.vector\.com\/.*\/events\/overview/i
+    ]
+  },
+  {
+    name: "semidrive_news",
+    displayName: "芯驰科技新闻",
+    patterns: [
+      /www\.semidrive\.com\/news/i
+    ]
+  },
+  {
+    name: "elektrobit_news",
+    displayName: "Elektrobit新闻",
+    patterns: [
+      /www\.elektrobit\.com\/newsroom/i
+    ]
+  },
+  {
+    name: "blacksesame_news",
+    displayName: "黑芝麻智能新闻",
+    patterns: [
+      /www\.blacksesame\.com\/zh\/news-center/i
+    ]
+  },
+  {
+    name: "tttech_auto_news",
+    displayName: "TTTech Auto新闻",
+    patterns: [
+      /www\.tttech-auto\.com\/newsroom/i
+    ]
+  }
+];
+
 type Props = ReturnType<typeof getSourceManagerData>;
 
 type CompanyResult = {
@@ -68,12 +147,7 @@ export const getServerSideProps: GetServerSideProps<Props> = async () => {
 export default function WorkbenchPage(props: Props) {
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
   const [expandedCompanyId, setExpandedCompanyId] = useState<string | null>(null);
-  const [crawlMode, setCrawlMode] = useState<"check" | "crawl">("crawl");
-  const [crawlResult, setCrawlResult] = useState<CrawlResult | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [currentCompanyId, setCurrentCompanyId] = useState<string | null>(null);
-  const [processedCount, setProcessedCount] = useState(0);
-  const cancelRef = useRef(false);
+  const [strategyRunning, setStrategyRunning] = useState<string | null>(null);
 
   const companiesWithSources = useMemo(() => {
     return props.companies.map(company => {
@@ -111,163 +185,50 @@ export default function WorkbenchPage(props: Props) {
   }, []);
 
   const selectCompany = useCallback((companyId: string) => {
-    if (isRunning) return;
     setSelectedCompanyIds(prev => 
       prev.includes(companyId) 
         ? prev.filter(id => id !== companyId)
         : [...prev, companyId]
     );
     setExpandedCompanyId(null);
-  }, [isRunning]);
+  }, []);
 
   const selectAll = useCallback((type?: string) => {
-    if (isRunning) return;
     const toSelect = type 
       ? groupedByType[type].map(c => c.id)
       : companiesWithSources.map(c => c.id);
     setSelectedCompanyIds(toSelect);
-  }, [isRunning, groupedByType, companiesWithSources]);
+  }, [groupedByType, companiesWithSources]);
 
   const clearSelection = useCallback(() => {
-    if (isRunning) return;
     setSelectedCompanyIds([]);
     setExpandedCompanyId(null);
-    setCrawlResult(null);
-  }, [isRunning]);
+  }, []);
 
-  async function runCrawl() {
-    if (selectedCompanyIds.length === 0) {
-      return;
-    }
-
-    setIsRunning(true);
-    setCrawlResult(null);
-    setProcessedCount(0);
-    cancelRef.current = false;
-
-    const companiesToProcess = [...selectedCompanyIds];
-
-    const results: CompanyResult[] = [];
-    let totalSuccess = 0;
-    let totalFailure = 0;
-    let totalCacheHit = 0;
-    let totalChanged = 0;
-    let totalInsight = 0;
-    const startTime = Date.now();
-
+  const runStrategyCrawl = useCallback(async (companyId: string, strategyName: string, url: string) => {
+    setStrategyRunning(strategyName);
     try {
-      for (let i = 0; i < companiesToProcess.length; i++) {
-        if (cancelRef.current) break;
-
-        const companyId = companiesToProcess[i];
-        const company = companiesWithSources.find(c => c.id === companyId);
-        
-        setCurrentCompanyId(companyId);
-        
-        const companyResult: CompanyResult = {
-          companyId,
-          companyName: company?.name || companyId,
-          successCount: 0,
-          failureCount: 0,
-          cacheHitCount: 0,
-          changedCount: 0,
-          insightCount: 0,
-          status: "running"
-        };
-
-        try {
-          const response = await fetch("/api/crawl", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              companyId,
-              useCache: crawlMode === "check",
-              forceRefresh: crawlMode === "crawl",
-              cacheMaxAgeHours: 24
-            })
-          });
-
-          const data = await response.json();
-          
-          if (data.ok && data.jobId) {
-            let jobStatus = data.status || "running";
-            let jobResult = null;
-            const maxWaitSeconds = 180;
-            let pollCount = 0;
-
-            while (true) {
-              if (cancelRef.current) break;
-              
-              const statusResp = await fetch(`/api/crawl?jobId=${data.jobId}`);
-              const statusData = await statusResp.json();
-              
-              if (statusData.ok) {
-                if (statusData.result) {
-                  jobResult = statusData.result;
-                  jobStatus = statusData.status;
-                  break;
-                }
-                if (statusData.status === "success" || statusData.status === "failed" || statusData.status === "partial") {
-                  jobStatus = statusData.status;
-                  break;
-                }
-                jobStatus = statusData.status || jobStatus;
-              }
-
-              pollCount++;
-              if (pollCount >= maxWaitSeconds) break;
-              await new Promise(r => setTimeout(r, 1000));
-            }
-
-            if (jobResult) {
-              companyResult.successCount = jobResult.successCount || 0;
-              companyResult.failureCount = jobResult.failureCount || 0;
-              companyResult.cacheHitCount = jobResult.cacheHitCount || 0;
-              companyResult.changedCount = jobResult.changedCount || 0;
-              companyResult.insightCount = jobResult.insightCount || 0;
-              companyResult.status = jobStatus === "success" || jobStatus === "partial" ? "success" : "failed";
-            } else {
-              companyResult.status = "failed";
-              companyResult.error = `Job ${jobStatus}, no result after ${pollCount}s`;
-            }
-            
-            totalSuccess += companyResult.successCount;
-            totalFailure += companyResult.failureCount;
-            totalCacheHit += companyResult.cacheHitCount;
-            totalChanged += companyResult.changedCount;
-            totalInsight += companyResult.insightCount;
-          } else {
-            companyResult.status = "failed";
-            companyResult.error = data.error || "未知错误";
-            totalFailure += 1;
-          }
-        } catch (err) {
-          companyResult.status = "failed";
-          companyResult.error = err instanceof Error ? err.message : String(err);
-          totalFailure += 1;
-        }
-
-        results.push(companyResult);
-        setProcessedCount(i + 1);
-        setCrawlResult({
-          companies: [...results],
-          totalSuccess,
-          totalFailure,
-          totalCacheHit,
-          totalChanged,
-          totalInsight,
-          durationMs: Date.now() - startTime
-        });
+      const response = await fetch("/api/strategy/crawl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, strategyName, pages: [1, 2, 3] })
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert(`${strategyName} 爬取成功！\n提取了 ${data.data.extractedItems?.length || 0} 条信息`);
+      } else {
+        alert(`爬取失败: ${data.error}`);
       }
+    } catch (err) {
+      alert(`爬取失败: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
-      setIsRunning(false);
-      setCurrentCompanyId(null);
+      setStrategyRunning(null);
     }
-  }
+  }, []);
 
   const selectedCompanies = selectedCompanyIds
     .map(id => companiesWithSources.find(c => c.id === id))
-    .filter(Boolean);
+    .filter((c): c is NonNullable<typeof c> => Boolean(c));
 
   return (
     <>
@@ -301,14 +262,13 @@ export default function WorkbenchPage(props: Props) {
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => selectAll()}
-                disabled={isRunning}
-                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
               >
                 全选 ({companiesWithSources.length})
               </button>
               <button
                 onClick={clearSelection}
-                disabled={isRunning || selectedCompanyIds.length === 0}
+                disabled={selectedCompanyIds.length === 0}
                 className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
               >
                 清空选择
@@ -317,171 +277,69 @@ export default function WorkbenchPage(props: Props) {
                 <button
                   key={type}
                   onClick={() => selectAll(type)}
-                  disabled={isRunning}
-                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
                 >
                   {sourceTypeLabels[type]?.label} ({companies.length})
                 </button>
               ))}
             </div>
-            <div className="flex flex-wrap gap-3">
-              <label className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  checked={crawlMode === "check"}
-                  onChange={() => setCrawlMode("check")}
-                  disabled={isRunning}
-                  className="text-moss"
-                />
-                <span className="text-slate-700">检查模式</span>
-              </label>
-              <label className="flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-2 text-sm cursor-pointer">
-                <input
-                  type="radio"
-                  checked={crawlMode === "crawl"}
-                  onChange={() => setCrawlMode("crawl")}
-                  disabled={isRunning}
-                  className="text-amber-600"
-                />
-                <span className="text-amber-700">爬取模式</span>
-              </label>
-            </div>
           </div>
 
           {selectedCompanyIds.length > 0 && (
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-moss/10 px-4 py-2 text-sm text-moss">
-                已选择 {selectedCompanyIds.length} 个公司
-              </span>
-              <button
-                onClick={clearSelection}
-                disabled={isRunning}
-                className="rounded-full border border-moss/30 bg-white px-4 py-2 text-sm text-moss hover:bg-moss/5 disabled:opacity-50"
-              >
-                清空
-              </button>
+            <div className="mt-4">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <span className="rounded-full bg-moss/10 px-4 py-2 text-sm text-moss">
+                  已选择 {selectedCompanyIds.length} 个公司
+                </span>
+                <button
+                  onClick={clearSelection}
+                  className="rounded-full border border-moss/30 bg-white px-4 py-2 text-sm text-moss hover:bg-moss/5"
+                >
+                  清空
+                </button>
+              </div>
+              
+              <div className="space-y-3">
+                {selectedCompanies.map(company => {
+                  const matchedStrategies = STRATEGY_PATTERNS.filter(strategy => 
+                    company.sources.some(source => 
+                      strategy.patterns.some(pattern => pattern.test(source.url))
+                    )
+                  );
+                  
+                  if (matchedStrategies.length === 0) return null;
+                  
+                  return (
+                    <div key={company.id} className="rounded-2xl border border-moss/20 bg-moss/5 p-4">
+                      <h4 className="text-sm font-semibold text-moss mb-2">{company.name}</h4>
+                      <div className="flex gap-2 flex-wrap">
+                        {matchedStrategies.map(strategy => {
+                          const matchedUrl = company.sources.find(s => 
+                            strategy.patterns.some(pattern => pattern.test(s.url))
+                          )?.url;
+                          return (
+                            <button
+                              key={strategy.name}
+                              onClick={() => {
+                                if (matchedUrl) {
+                                  runStrategyCrawl(company.id, strategy.name, matchedUrl);
+                                }
+                              }}
+                              disabled={strategyRunning === strategy.name}
+                              className="rounded-full bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                            >
+                              {strategyRunning === strategy.name ? "爬取中..." : strategy.displayName}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
-
-          <div className="mt-5 flex flex-wrap items-center gap-4">
-            <button
-              onClick={runCrawl}
-              disabled={isRunning || selectedCompanyIds.length === 0}
-              className="rounded-full bg-moss px-8 py-3 text-base font-semibold text-white disabled:opacity-50"
-            >
-              {isRunning 
-                ? `正在${crawlMode === "check" ? "检查" : "爬取"}...` 
-                : `${crawlMode === "check" ? "检查" : "爬取"}选中公司 (${selectedCompanyIds.length})`}
-            </button>
-            {selectedCompanyIds.length === 0 && !isRunning && (
-              <span className="text-sm text-slate-500">请从下方选择公司（可多选）</span>
-            )}
-          </div>
         </section>
-
-        {isRunning && (
-          <section className="mt-6 rounded-3xl border border-blue-200 bg-blue-50 p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold text-blue-700">执行进度</p>
-                <p className="mt-1 text-sm text-blue-600">
-                  正在处理: {currentCompanyId} ({processedCount}/{selectedCompanyIds.length})
-                </p>
-              </div>
-              <span className="text-3xl font-bold text-blue-700">
-                {Math.round((processedCount / selectedCompanyIds.length) * 100)}%
-              </span>
-            </div>
-            <div className="mt-3 h-4 w-full overflow-hidden rounded-full bg-blue-200">
-              <div 
-                className="h-full rounded-full bg-blue-600 transition-all duration-300"
-                style={{ width: `${(processedCount / selectedCompanyIds.length) * 100}%` }}
-              />
-            </div>
-            {crawlResult && crawlResult.companies.length > 0 && (
-              <div className="mt-4 space-y-2">
-                {crawlResult.companies.map((company, idx) => (
-                  <div key={idx} className="flex items-center gap-3 rounded-lg bg-white px-3 py-2 text-sm">
-                    {company.status === "running" && (
-                      <span className="h-2 w-2 animate-spin rounded-full bg-blue-500" />
-                    )}
-                    {company.status === "success" && (
-                      <span className="text-emerald-600">✓</span>
-                    )}
-                    {company.status === "failed" && (
-                      <span className="text-red-600">✗</span>
-                    )}
-                    <span className="font-medium">{company.companyName}</span>
-                    {company.status === "running" && <span className="text-slate-500">处理中...</span>}
-                    {company.status === "success" && (
-                      <span className="text-slate-500">
-                        成功 {company.successCount} | 失败 {company.failureCount} | 缓存 {company.cacheHitCount}
-                      </span>
-                    )}
-                    {company.status === "failed" && (
-                      <span className="text-red-500">{company.error}</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
-
-        {crawlResult && !isRunning && (
-          <section className="mt-6 rounded-3xl border border-emerald-200 bg-emerald-50 p-6">
-            <h2 className="text-lg font-semibold text-emerald-800">执行结果</h2>
-            <div className="mt-4 grid gap-4 md:grid-cols-4">
-              <div className="rounded-2xl bg-white p-4 text-center">
-                <p className="text-3xl font-bold text-emerald-600">{crawlResult.totalSuccess}</p>
-                <p className="text-sm text-slate-600">成功</p>
-              </div>
-              <div className="rounded-2xl bg-white p-4 text-center">
-                <p className="text-3xl font-bold text-red-600">{crawlResult.totalFailure}</p>
-                <p className="text-sm text-slate-600">失败</p>
-              </div>
-              <div className="rounded-2xl bg-white p-4 text-center">
-                <p className="text-3xl font-bold text-blue-600">{crawlResult.totalCacheHit}</p>
-                <p className="text-sm text-slate-600">缓存命中</p>
-              </div>
-              <div className="rounded-2xl bg-white p-4 text-center">
-                <p className="text-3xl font-bold text-violet-600">{crawlResult.totalInsight}</p>
-                <p className="text-sm text-slate-600">洞察生成</p>
-              </div>
-            </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl bg-white p-4 text-center">
-                <p className="text-2xl font-bold text-slate-700">{crawlResult.companies.length}</p>
-                <p className="text-sm text-slate-600">处理公司数</p>
-              </div>
-              <div className="rounded-2xl bg-white p-4 text-center">
-                <p className="text-2xl font-bold text-slate-700">{crawlResult.durationMs}ms</p>
-                <p className="text-sm text-slate-600">总耗时</p>
-              </div>
-            </div>
-            <div className="mt-4 space-y-2">
-              {crawlResult.companies.map((company, idx) => (
-                <div key={idx} className="flex items-center gap-3 rounded-lg bg-white px-4 py-3">
-                  <span className={company.status === "success" ? "text-emerald-600" : "text-red-600"}>
-                    {company.status === "success" ? "✓" : "✗"}
-                  </span>
-                  <span className="font-medium">{company.companyName}</span>
-                  <span className="text-sm text-slate-500">
-                    成功 {company.successCount} | 失败 {company.failureCount} | 缓存 {company.cacheHitCount} | 洞察 {company.insightCount}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-3">
-              <a href="/jobs" className="rounded-full bg-emerald-600 px-5 py-2 text-sm font-semibold text-white">
-                查看任务中心
-              </a>
-              <a href="/errors" className="rounded-full border border-red-200 bg-white px-5 py-2 text-sm font-semibold text-red-600">
-                查看错误
-              </a>
-            </div>
-          </section>
-        )}
 
         <section className="mt-8">
           <h2 className="text-xl font-semibold text-ink">公司列表</h2>
@@ -571,17 +429,7 @@ export default function WorkbenchPage(props: Props) {
                                 );
                               })}
                             </div>
-                            <div className="mt-4 flex gap-2">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  runCrawl();
-                                }}
-                                disabled={isRunning}
-                                className="rounded-full bg-moss px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                              >
-                                爬取该公司
-                              </button>
+                            <div className="mt-4 flex gap-2 flex-wrap">
                               <a
                                 href={`/company/${company.id}`}
                                 onClick={(e) => e.stopPropagation()}

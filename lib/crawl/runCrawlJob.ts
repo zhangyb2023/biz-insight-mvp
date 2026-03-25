@@ -22,6 +22,8 @@ import {
 import { resolveCompanyUrls } from "@/lib/search/searchUrls";
 import type { ExtractedItem, SourceRegistryRecord, TriggerType, UrlType } from "@/lib/types";
 import { intelligentCrawl, batchIntelligentCrawl, type IntelligentSourceType } from "@/lib/crawl/intelligentCrawl";
+import { playwrightCrawl } from "@/lib/crawl/playwrightCrawl";
+import { parseGasgooFlashPage, isGasgooFlashPage, type GasgooFlashItem } from "@/lib/extract/gasgooFlash";
 
 type RunCrawlJobOptions = {
   companyId?: string;
@@ -287,14 +289,73 @@ export async function runCrawlJob(options: RunCrawlJobOptions = {}) {
           source.url_type === "ecosystem" ? "professional" : "official";
         const searchKeyword = (company.keywords || []).join(" ");
 
-        const intelligentResult = await intelligentCrawl(
-          source.url,
-          sourceType,
-          searchKeyword,
-          company.website
-        );
+        let intelligentResult: Awaited<ReturnType<typeof intelligentCrawl>> | null = null;
+        let page = undefined;
+        let gasgooFlashItems: GasgooFlashItem[] = [];
 
-        const page = intelligentResult.success ? intelligentResult.page : undefined;
+        if (isGasgooFlashPage(source.url)) {
+          const pageNumbers = [1, 2, 3];
+          const urlsToCrawl = pageNumbers.map(p => {
+            if (p === 1) return source.url;
+            return source.url.replace(/\/(\d+)$/, `/${p}`);
+          });
+          
+          const crawlResult = await playwrightCrawl(urlsToCrawl, {
+            useCache: options.useCache ?? true,
+            forceRefresh: options.forceRefresh ?? false,
+            cacheMaxAgeHours: source.cache_ttl_hours ?? options.cacheMaxAgeHours ?? 24
+          });
+          
+          let allItems: GasgooFlashItem[] = [];
+          let latestDate = "";
+          let htmlContent = "";
+          
+          for (const rawPage of crawlResult.pages) {
+            if (rawPage && rawPage.html && rawPage.html.length > 100) {
+              const parsed = parseGasgooFlashPage(rawPage.html, source.url);
+              allItems = allItems.concat(parsed.items);
+              if (parsed.items.length > 0 && parsed.items[0].publishDate) {
+                latestDate = parsed.items[0].publishDate;
+              }
+              if (!htmlContent) {
+                htmlContent = rawPage.html;
+              }
+            }
+          }
+          
+          if (allItems.length > 0) {
+            gasgooFlashItems = allItems;
+            page = {
+              url: source.url,
+              title: "盖世快讯",
+              html: htmlContent,
+              fetchedAt: new Date().toISOString(),
+              checkedAt: new Date().toISOString(),
+              fromCache: false,
+              httpStatus: 200,
+              fetchStrategy: "playwright",
+              fallbackUsed: false,
+              fallbackReason: null,
+              publishedTime: latestDate || undefined
+            };
+          } else {
+            intelligentResult = await intelligentCrawl(
+              source.url,
+              sourceType,
+              searchKeyword,
+              company.website
+            );
+            page = intelligentResult.success ? intelligentResult.page : undefined;
+          }
+        } else {
+          intelligentResult = await intelligentCrawl(
+            source.url,
+            sourceType,
+            searchKeyword,
+            company.website
+          );
+          page = intelligentResult.success ? intelligentResult.page : undefined;
+        }
 
         upsertSourceRegistryStatus({
           url: source.url,
@@ -307,8 +368,8 @@ export async function runCrawlJob(options: RunCrawlJobOptions = {}) {
             crawlMode: "invalid_source",
             evaluationStatus: "failed",
             evaluationScore: 10,
-            evaluationReason: intelligentResult.error || "intelligent_crawl_failed",
-            fixedReason: "智能爬取失败，来源需排查。",
+            evaluationReason: intelligentResult?.error || "crawl_failed",
+            fixedReason: "爬取失败，来源需排查。",
             successRate: 0,
             noiseScore: 0.5,
             valueScore: 0.1,
@@ -317,8 +378,8 @@ export async function runCrawlJob(options: RunCrawlJobOptions = {}) {
           finalizeCrawlJobStep({
             stepId: fetchStep.id,
             status: "failed",
-            outputJson: { error: intelligentResult.error },
-            errorMessage: `智能爬取失败: ${intelligentResult.error}`
+            outputJson: { error: intelligentResult?.error || "crawl_failed" },
+            errorMessage: `爬取失败: ${intelligentResult?.error || "unknown"}`
           });
           failureCount += 1;
           continue;
@@ -340,7 +401,7 @@ export async function runCrawlJob(options: RunCrawlJobOptions = {}) {
             fetch_strategy: page.fetchStrategy ?? "intelligent",
             fallback_used: page.fallbackUsed ?? false,
             fallback_reason: page.fallbackReason ?? null,
-            intelligent_used: !!intelligentResult.success
+            intelligent_used: intelligentResult?.success ?? false
           }
         });
 
@@ -351,7 +412,7 @@ export async function runCrawlJob(options: RunCrawlJobOptions = {}) {
           stepName: "html_capture",
           stepOrder: 3,
           toolType: "crawler",
-          toolName: "jina-reader",
+          toolName: isGasgooFlashPage(source.url) ? "playwright" : "jina-reader",
           moduleName: "lib/crawl/intelligentCrawl.ts",
           runtime: "node",
           inputJson: { html_length: page.html.length },
@@ -368,7 +429,32 @@ export async function runCrawlJob(options: RunCrawlJobOptions = {}) {
           }
         });
 
-        const cleanResult = cleanText(page.html, JSON.parse(source.keywords_json || "[]") as string[], page.url, page.publishedTime);
+        const isGasgooPage = isGasgooFlashPage(source.url);
+        
+        let cleanResult: ReturnType<typeof cleanText>;
+        if (isGasgooPage && gasgooFlashItems.length > 0) {
+          const extractedItemsForGasgoo: ExtractedItem[] = gasgooFlashItems.map(item => ({
+            title: item.title,
+            summary: item.content.slice(0, 280),
+            date: item.publishDate,
+            url: item.url
+          }));
+          const combinedText = gasgooFlashItems
+            .map(item => `${item.title}\n${item.publishDate}\n${item.content}`)
+            .join("\n\n");
+          
+          cleanResult = {
+            text: combinedText,
+            extractedItems: extractedItemsForGasgoo,
+            pageKind: "list" as const,
+            publishedAt: gasgooFlashItems[0]?.publishDate,
+            completenessScore: 1,
+            canonicalUrl: page.url,
+            matchedKeywords: []
+          };
+        } else {
+          cleanResult = cleanText(page.html, JSON.parse(source.keywords_json || "[]") as string[], page.url, page.publishedTime);
+        }
 
         const cleanStep = createTrackedStep({
           jobId: job.id,

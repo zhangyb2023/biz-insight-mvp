@@ -6,6 +6,18 @@ type InsightItem = {
   summary?: string;
   insight_type?: string;
   category?: string;
+  insight_event_type?: string;
+  insight_importance_level?: "" | "high" | "medium" | "low";
+  insight_evidence_strength?: number | null;
+  insight_confidence?: number | null;
+  insight_statement?: string;
+  insight_why_it_matters?: string;
+  insight_next_action?: string;
+  insight_to_phua_relation?: string[];
+  insight_topic_tags?: string[];
+  insight_supporting_facts?: string[];
+  insight_risk_note?: string;
+  insight_updated_at?: string | null;
 };
 
 type Props = {

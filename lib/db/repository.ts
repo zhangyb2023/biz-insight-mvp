@@ -89,7 +89,7 @@ const executiveCompanyTypeMap: Record<string, string> = {
 
 const executiveCompanyTypeFallback = "其他动态";
 
-const consumptionCategories: ConsumptionCategory[] = ["新闻动态", "产品", "技术", "招聘", "生态"];
+const consumptionCategories: ConsumptionCategory[] = ["产品技术", "生态合作", "战略动向", "政策法规", "人才动态"];
 
 function mapConsumptionCategory(input: {
   category?: string | null;
@@ -103,19 +103,22 @@ function mapConsumptionCategory(input: {
     .join(" ")
     .toLowerCase();
 
-  if (/(jobs|career|talent|hiring|招聘|岗位|人才)/.test(value)) {
-    return "招聘";
+  if (/(jobs|career|talent|hiring|招聘|岗位|人才|社招|校招)/.test(value)) {
+    return "人才动态";
   }
-  if (/(ecosystem|partner|alliance|cooperation|合作|伙伴|生态|联盟)/.test(value)) {
-    return "生态";
+  if (/(ecosystem|partner|alliance|cooperation|合作|伙伴|生态|联盟|战略合作|签约|并购|投资|生态伙伴)/.test(value)) {
+    return "生态合作";
   }
-  if (/(technology|technical|software|autosar|platform|ai|chip|芯片|技术|软件|平台|系统|算法|基础软件)/.test(value)) {
-    return "技术";
+  if (/(融资|投资|财报|业绩|产能|扩张|高管|变动|上市|ipo|并购|收购|战略)/.test(value)) {
+    return "战略动向";
   }
-  if (/(product|solution|launch|feature|车型|产品|方案|发布|升级)/.test(value)) {
-    return "产品";
+  if (/(policy|policy|法规|政策|监管|合规|标准|iso|iec|认证|安全|功能安全)/.test(value)) {
+    return "政策法规";
   }
-  return "新闻动态";
+  if (/(product|solution|launch|feature|车型|产品|方案|发布|升级|新品|获奖|专利|技术突破|研发)/.test(value)) {
+    return "产品技术";
+  }
+  return "战略动向";
 }
 
 export function loadCompanies() {
@@ -181,7 +184,7 @@ export function bootstrapSourceRegistryFromCompanies(companies: CompanyRecord[])
   `);
 
   for (const company of companies) {
-    const urls = [...new Set([company.website, ...company.urls].filter(Boolean))];
+    const urls = [...new Set([company.website, ...(company.urls || [])].filter(Boolean))];
     for (const url of urls) {
       registryStatement.run(
         company.id,
@@ -1549,11 +1552,32 @@ export function getCompanyDetails(companyId: string, options: { includeInactive?
       ...company,
       keywords: parseJson(company.keywords, [] as string[])
     },
-    documents: documents.map((item) => ({
-      ...item,
-      matched_keywords: parseJson(item.matched_keywords, [] as string[]),
-      extracted_items: parseJson(item.extracted_items, [])
-    })) as StoredDocument[]
+    documents: documents.map((item) => {
+      const parsedItems = parseJson(item.extracted_items, [] as any[]);
+      const enhancedItems = parsedItems.map((ei: any) => ({
+        title: ei.title || "",
+        summary: ei.summary || "",
+        date: ei.date || "",
+        url: ei.url || "",
+        insight_event_type: ei.insight_event_type || "",
+        insight_importance_level: ei.insight_importance_level || "",
+        insight_evidence_strength: ei.insight_evidence_strength ?? null,
+        insight_confidence: ei.insight_confidence ?? null,
+        insight_statement: ei.insight_statement || "",
+        insight_why_it_matters: ei.insight_why_it_matters || "",
+        insight_next_action: ei.insight_next_action || "",
+        insight_to_phua_relation: ei.insight_to_phua_relation || [],
+        insight_topic_tags: ei.insight_topic_tags || [],
+        insight_supporting_facts: ei.insight_supporting_facts || [],
+        insight_risk_note: ei.insight_risk_note || "",
+        insight_updated_at: ei.insight_updated_at || null,
+      }));
+      return {
+        ...item,
+        matched_keywords: parseJson(item.matched_keywords, [] as string[]),
+        extracted_items: enhancedItems
+      };
+    }) as StoredDocument[]
   };
 }
 
@@ -1872,13 +1896,15 @@ export function getTableColumns(table: string) {
 
 export function getAllInsightItems() {
   const db = getDb();
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT 
+      c.id as company_id,
       c.name as company_name,
       s.title,
       s.url,
       s.fetch_date,
       d.published_at,
+      d.extracted_items,
       i.summary,
       i.insight_type,
       i.category,
@@ -1893,5 +1919,103 @@ export function getAllInsightItems() {
       AND s.title != ''
     ORDER BY s.fetch_date DESC
     LIMIT 200
-  `).all();
+  `).all() as Array<{
+    company_id: string;
+    company_name: string;
+    title: string;
+    url: string;
+    fetch_date: string;
+    published_at: string | null;
+    extracted_items: string | null;
+    summary: string | null;
+    insight_type: string | null;
+    category: string | null;
+    completeness_score: number | null;
+    clean_text: string | null;
+  }>;
+
+  const result: Array<{
+    company_id: string;
+    company_name: string;
+    title: string;
+    url: string;
+    fetch_date: string;
+    published_at: string | null;
+    summary: string | null;
+    insight_type: string | null;
+    category: string | null;
+    completeness_score: number | null;
+    insight_event_type: string;
+    insight_importance_level: "" | "high" | "medium" | "low";
+    insight_evidence_strength: number | null;
+    insight_confidence: number | null;
+    insight_statement: string;
+    insight_why_it_matters: string;
+    insight_next_action: string;
+    insight_to_phua_relation: string[];
+    insight_topic_tags: string[];
+    insight_supporting_facts: string[];
+    insight_risk_note: string;
+    insight_updated_at: string | null;
+  }> = [];
+
+  for (const row of rows) {
+    const extractedItems = row.extracted_items ? parseJson(row.extracted_items, [] as any[]) : [];
+    
+    if (extractedItems.length > 0) {
+      for (const item of extractedItems) {
+        result.push({
+          company_id: row.company_id,
+          company_name: row.company_name,
+          title: item.title || row.title,
+          url: item.url || row.url,
+          fetch_date: row.fetch_date,
+          published_at: item.date || row.published_at,
+          summary: item.summary || null,
+          insight_type: row.insight_type || "news",
+          category: item.category || row.category || "战略动向",
+          completeness_score: row.completeness_score || 1,
+          insight_event_type: item.insight_event_type || "",
+          insight_importance_level: item.insight_importance_level || "",
+          insight_evidence_strength: item.insight_evidence_strength ?? null,
+          insight_confidence: item.insight_confidence ?? null,
+          insight_statement: item.insight_statement || "",
+          insight_why_it_matters: item.insight_why_it_matters || "",
+          insight_next_action: item.insight_next_action || "",
+          insight_to_phua_relation: item.insight_to_phua_relation || [],
+          insight_topic_tags: item.insight_topic_tags || [],
+          insight_supporting_facts: item.insight_supporting_facts || [],
+          insight_risk_note: item.insight_risk_note || "",
+          insight_updated_at: item.insight_updated_at || null,
+        });
+      }
+    } else {
+      result.push({
+        company_id: row.company_id,
+        company_name: row.company_name,
+        title: row.title,
+        url: row.url,
+        fetch_date: row.fetch_date,
+        published_at: row.published_at,
+        summary: row.summary || null,
+        insight_type: row.insight_type || null,
+        category: row.category || "战略动向",
+        completeness_score: row.completeness_score || null,
+        insight_event_type: "",
+        insight_importance_level: "",
+        insight_evidence_strength: null,
+        insight_confidence: null,
+        insight_statement: "",
+        insight_why_it_matters: "",
+        insight_next_action: "",
+        insight_to_phua_relation: [],
+        insight_topic_tags: [],
+        insight_supporting_facts: [],
+        insight_risk_note: "",
+        insight_updated_at: null,
+      });
+    }
+  }
+
+  return result;
 }

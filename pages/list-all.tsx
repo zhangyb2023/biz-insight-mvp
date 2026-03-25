@@ -11,9 +11,21 @@ type ListItem = {
   insight_type: string | null;
   category: string | null;
   completeness_score: number | null;
+  insight_event_type: string;
+  insight_importance_level: "" | "high" | "medium" | "low";
+  insight_evidence_strength: number | null;
+  insight_confidence: number | null;
+  insight_statement: string;
+  insight_why_it_matters: string;
+  insight_next_action: string;
+  insight_to_phua_relation: string[];
+  insight_topic_tags: string[];
+  insight_supporting_facts: string[];
+  insight_risk_note: string;
+  insight_updated_at: string | null;
 };
 
-const CATEGORIES = ["全部", "产品", "技术", "生态", "新闻动态", "招聘"] as const;
+const CATEGORIES = ["全部", "产品技术", "生态合作", "战略动向", "政策法规", "人才动态"] as const;
 const TIME_FILTERS = [
   { key: "all", label: "全选" },
   { key: "published", label: "发布时间" },
@@ -28,14 +40,21 @@ const MIN_INSIGHT_DATE = "2026-01-01";
 
 function translateCategory(cat: string): string {
   const map: Record<string, string> = {
-    "product": "产品",
-    "technology": "技术",
-    "ecosystem": "生态",
-    "news": "新闻动态",
-    "jobs": "招聘",
-    "general": "新闻动态",
+    "product": "产品技术",
+    "technology": "产品技术",
+    "tech": "产品技术",
+    "ecosystem": "生态合作",
+    "strategy": "战略动向",
+    "strategic": "战略动向",
+    "policy": "政策法规",
+    "regulation": "政策法规",
+    "jobs": "人才动态",
+    "talent": "人才动态",
+    "recruitment": "人才动态",
+    "news": "战略动向",
+    "general": "战略动向",
   };
-  return map[cat?.toLowerCase()] || cat || "新闻动态";
+  return map[cat?.toLowerCase()] || cat || "战略动向";
 }
 
 function translateToChinese(text: string): string {
@@ -83,20 +102,28 @@ function isEnglish(text: string): boolean {
   return chineseChars < text.length * 0.2;
 }
 
-function formatDate(dateStr: string | null): string {
+function formatDate(dateStr: string | null, showTime: boolean = false): string {
   if (!dateStr) return "未知";
   try {
     const d = new Date(dateStr);
-    return d.toLocaleString("zh-CN", {
+    if (showTime) {
+      return d.toLocaleString("zh-CN", {
+        timeZone: "Asia/Shanghai",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+    return d.toLocaleDateString("zh-CN", {
       timeZone: "Asia/Shanghai",
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
     });
   } catch {
-    return String(dateStr).slice(0, 16);
+    return String(dateStr).slice(0, 10);
   }
 }
 
@@ -116,6 +143,7 @@ export default function ListAllPage() {
   const [dateTo, setDateTo] = useState<string>("");
   const [showMode, setShowMode] = useState<ShowMode>("valid");
   const [loading, setLoading] = useState(true);
+  const [companyFilter, setCompanyFilter] = useState<string>("");
 
   useEffect(() => {
     fetch("/api/all-items")
@@ -194,6 +222,23 @@ export default function ListAllPage() {
   const filteredItems = useMemo(() => {
     let result = [...dateFilteredItems];
 
+    // 分类过滤
+    if (activeCategory !== "全部") {
+      result = result.filter(item => {
+        const itemCat = translateCategory(item.category || item.insight_type || "");
+        return itemCat === activeCategory;
+      });
+    }
+
+    // 公司过滤
+    if (companyFilter.trim()) {
+      const query = companyFilter.trim().toLowerCase();
+      result = result.filter(item => 
+        item.company_name?.toLowerCase().includes(query)
+      );
+    }
+
+    // 时间过滤
     if (activeTimeFilter === "published") {
       result = result.filter(item => item.published_at);
     } else if (activeTimeFilter === "fetched") {
@@ -207,16 +252,17 @@ export default function ListAllPage() {
     });
 
     return result;
-  }, [dateFilteredItems, activeTimeFilter, sortOrder]);
+  }, [dateFilteredItems, activeTimeFilter, activeCategory, sortOrder, companyFilter]);
 
   const resetFilters = () => {
     setActiveCategory("全部");
     setActiveTimeFilter("all");
     setSortOrder("desc");
+    setCompanyFilter("");
     clearDateFilter();
   };
 
-  const isDefaultState = activeCategory === "全部" && activeTimeFilter === "all" && sortOrder === "desc" && !hasDateFilter;
+  const isDefaultState = activeCategory === "全部" && activeTimeFilter === "all" && sortOrder === "desc" && !hasDateFilter && !companyFilter;
 
   if (loading) {
     return (
@@ -312,6 +358,19 @@ export default function ListAllPage() {
               >
                 最早优先 ↑
               </button>
+            </div>
+
+            <div className="h-6 w-px bg-slate-200" />
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-slate-600">公司：</span>
+              <input
+                type="text"
+                value={companyFilter}
+                onChange={e => setCompanyFilter(e.target.value)}
+                placeholder="输入公司名称"
+                className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm w-36"
+              />
             </div>
 
             <div className="h-6 w-px bg-slate-200" />
