@@ -1041,19 +1041,23 @@ export default function InsightsPage() {
     try {
       setReportLoadingStep("正在调用 DeepSeek 生成报告...");
 
-      const topicStats: Record<string, { count: number; trend: string; insight: string }> = {};
-      TOPICS.slice(1).forEach(t => {
-        const topicItems = filteredItems.filter(item => mapToTopic(item) === t.key);
-        topicStats[t.label] = {
-          count: topicItems.length,
-          trend: topicItems.length >= 5 ? "上升" : topicItems.length >= 2 ? "稳定" : "下降",
-          insight: topicItems.length > 0 ? generateJudgment(topicItems[0]) : "样本不足"
-        };
-      });
+      const windowDaysMap: Record<TimeRange, number> = { "7d": 7, "30d": 30, "90d": 90 };
+      const windowDays = windowDaysMap[timeRange];
+
+      const compactItems = filteredItems.map((item: any) => ({
+        company: item.company_name || "未知",
+        company_id: item.company_id,
+        title: item.title || "",
+        summary: (item.summary || "").substring(0, 200),
+        date: item.published_at ? new Date(item.published_at).toISOString().split("T")[0] : "",
+        category: item.category || item.insight_type || "战略动向",
+      }));
 
       const reportData = {
         report_type: reportType,
         time_range: timeRangeLabel,
+        window_days: windowDays,
+        company_ids: selectedCompanyIds.length > 0 ? selectedCompanyIds : undefined,
         filters: {
           topic: activeTopic !== "all" ? activeTopic : undefined,
           core_only: coreOnly,
@@ -1061,31 +1065,12 @@ export default function InsightsPage() {
           evidence_type: evidenceType !== "all" ? evidenceType : undefined,
           search_query: searchQuery || undefined
         },
-        summary: {
-          total_count: filteredItems.length,
-          high_value_count: highValueCount,
-          target_company_count: targetCompanies.length,
-          source_purity_percent: sourceDistribution.find(s => s.label === "一手信源")?.percent || 0
-        },
-        core_judgments: coreJudgments.map(j => `${j.type}: ${j.text}`),
-        topic_stats: topicStats,
-        top_insights: insightCards.slice(0, 20).map(card => ({
-          title: card.title,
-          topic: TOPICS.find(t => t.key === card.topic)?.label || card.topic,
-          judgment: card.judgment,
-          risk_note: card.riskNote,
-          next_action: card.nextAction,
-          company: card.company,
-          published_at: card.timeRange,
-          confidence: card.confidenceLevel,
-          entity_type: card.entityType === "target_company" ? "目标公司" : card.entityType === "source_media" ? "信息来源" : "其他"
-        })),
-        source_distribution: sourceDistribution,
-        company_heat: {
-          target: targetCompanies.slice(0, 10),
-          source: sourceMedia.slice(0, 10)
-        },
-        generated_at: new Date().toISOString()
+        items: compactItems,
+        meta: {
+          total_items: filteredItems.length,
+          companies_count: new Set(filteredItems.map((i: any) => i.company_id)).size,
+          cutoff_date: new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+        }
       };
 
       const response = await fetch("/api/insights/report", {

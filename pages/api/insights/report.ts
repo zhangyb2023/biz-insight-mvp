@@ -4,9 +4,21 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 
+interface CompactItem {
+  company: string;
+  company_id?: string;
+  title: string;
+  summary: string;
+  date: string;
+  category: string;
+}
+
 interface ReportRequest {
   report_type: "brief" | "exec";
   time_range: string;
+  time_window_days: number;
+  window_days: number;
+  company_ids?: string[];
   filters: {
     topic?: string;
     core_only?: boolean;
@@ -14,137 +26,80 @@ interface ReportRequest {
     evidence_type?: string;
     search_query?: string;
   };
-  summary: {
-    total_count: number;
-    high_value_count: number;
-    target_company_count: number;
-    source_purity_percent: number;
+  items: CompactItem[];
+  meta: {
+    total_items: number;
+    companies_count: number;
+    cutoff_date: string;
   };
-  core_judgments: string[];
-  topic_stats: Record<string, { count: number; trend: string; insight: string }>;
-  top_insights: Array<{
-    title: string;
-    topic: string;
-    judgment: string;
-    risk_note: string;
-    next_action: string;
-    company: string;
-    published_at: string;
-    confidence: string;
-    entity_type: string;
-  }>;
-  source_distribution: Array<{ label: string; value: number; percent: number }>;
-  company_heat: { target: Array<{ name: string; count: number }>; source: Array<{ name: string; count: number }> };
-  generated_at: string;
+}
+
+const COMPANY_DISPLAY_NAMES: Record<string, string> = {
+  "vector": "Vector",
+  "elektrobit": "Elektrobit",
+  "tttech-auto": "TTTech Auto",
+  "hirain": "经纬恒润",
+  "reachauto": "东软睿驰",
+  "thundersoft": "中科创达",
+  "huawei-qiankun-auto": "华为乾崑",
+  "semi-drive": "芯驰科技",
+  "black-sesame": "黑芝麻智能",
+  "etas": "ETAS",
+  "autosar": "AUTOSAR",
+  "盖世汽车": "盖世汽车",
+  "neu-sar": "NeuSAR",
+};
+
+function getDisplayName(companyId: string): string {
+  return COMPANY_DISPLAY_NAMES[companyId] || companyId;
 }
 
 function buildPrompt(data: ReportRequest): string {
   const isExec = data.report_type === "exec";
+  const displayCompany = data.company_ids?.length === 1 ? getDisplayName(data.company_ids[0]) : null;
   
-  const confidenceLevel = data.summary.total_count === 0 ? "样本不足" :
-    data.summary.source_purity_percent >= 40 && (data.summary.high_value_count / data.summary.total_count) >= 0.3 ? "较高" :
-    data.summary.source_purity_percent >= 20 ? "中等" : "较低";
-  
-  const topEvidence = data.top_insights
-    .slice(0, isExec ? 5 : 3)
-    .filter(i => i.confidence === "高" || i.entity_type === "一手信源")
-    .map((insight, idx) => ({
-      title: insight.title,
-      company: insight.company,
-      date: insight.published_at,
-      why: insight.judgment || insight.next_action
-    }));
+  const reportTitle = displayCompany 
+    ? `普华汽车电子商业洞察观察简报：${displayCompany}（近${data.window_days}天）`
+    : `普华汽车电子商业洞察总览简报（近${data.window_days}天）`;
 
-  const keyEvidence = topEvidence.length > 0 ? topEvidence.map((e, idx) => 
-`${idx + 1}. **${e.title}**
-   - 来源: ${e.company} | ${e.date}
-   - 重要性: ${e.why}`
-  ).join("\n\n") : "样本不足，无法确定代表性证据";
+  const reportDescription = displayCompany
+    ? `本报告基于近${data.window_days}天 ${displayCompany} 相关公开动态信息生成，用于从普华视角观察该公司的重点动作、潜在影响及建议跟踪方向。`
+    : `本报告基于近${data.window_days}天全部目标公司的公开动态信息生成，用于辅助管理层快速识别行业重点变化、竞争信号与合作机会。`;
 
-  const sourceNote = data.source_distribution.map(s => 
-    `${s.label}: ${s.value}条(${s.percent}%)`
-  ).join("、");
+  const singleCompanyContext = displayCompany
+    ? `\n\n【重点关注公司】本期报告聚焦于 ${displayCompany}。你的分析应以此公司为核心，提及其他公司时只作为对标对象、合作上下文或生态关联对象，不能喧宾夺主。`
+    : "";
 
-  return `你是商业洞察分析助手。请基于以下结构化数据，生成一份面向管理层的商业洞察报告。
+  return `请分析以下近${data.window_days}天的汽车电子行业动态，生成结构化商业洞察报告。${singleCompanyContext}
 
-【核心任务】输出商业判断，不是信息摘要。每一个判断都要回答：这对我们的业务意味着什么？
+输入数据：
+${JSON.stringify(data.items, null, 2)}
 
-【报告类型】${isExec ? "管理层报告" : "简版报告"}
-【观察范围】${data.time_range}
 【数据概览】
-- 有效洞察: ${data.summary.total_count}条
-- 高置信洞察: ${data.summary.high_value_count}条
-- 涉及目标公司: ${data.summary.target_company_count}家
-- 来源分布: ${sourceNote}
+- 有效洞察: ${data.items.length}条
+- 涉及目标公司: ${data.meta.companies_count}家
+- 时间范围: 近${data.window_days}天
 
-【置信说明】
-- 置信水平: ${confidenceLevel}
-- 样本量: ${data.summary.total_count}条
-- 一手信源占比: ${data.summary.source_purity_percent}%
-- 适用边界: 本报告反映公开信息动态，不替代尽调
+【特别要求】
+1. 执行摘要要明确写出"本期最值得管理层关注的3件事是什么"
+2. 重点变化每条都要包含：具体变化内容、对普华的具体影响、建议动作
+3. 对普华影响不要写"值得关注"，要写具体：影响哪个方面、可能带来什么机会或威胁
+4. 管理动作建议要具体到部门和具体事项，如"建议产品/平台团队：跟进XXX技术进展，评估对基础软件的影响"
+5. 如果某方面证据不足，明确写"当前公开信息有限，建议继续跟踪"
+6. 结论措辞要适度：不用"必须/立即/否则"，多用"建议优先评估/建议重点验证/若趋势延续则可能"
+7. 如果样本集中，明确说明结论边界
 
-【重点对象】
-目标公司:
-${data.company_heat.target.slice(0, 5).map(c => `- ${c.name}: ${c.count}条信号`).join("\n") || "无"}
-
-二手信源:
-${data.company_heat.source.slice(0, 5).map(c => `- ${c.name}: ${c.count}条`).join("\n") || "无"}
-
-【代表证据】(按置信度和来源筛选)
-${keyEvidence}
-
-请严格按照以下结构输出Markdown报告。语言简洁，面向管理层，禁止堆砌原文:
-
-# 商业洞察报告
-
-## 置信说明
-- **置信水平**: ${confidenceLevel}
-- **样本量**: ${data.summary.total_count}条
-- **一手信源占比**: ${data.summary.source_purity_percent}%
-- **适用边界**: 本报告反映公开信息动态，不替代尽调
-
-## 观察范围
-- 时间范围: ${data.time_range}
-- 数据来源: ${data.summary.total_count}条洞察，${sourceNote}
-
-## 核心结论（固定3条）
-请输出：
-1. **趋势判断**: 当前最显著的信号是什么，说明什么行业动向
-2. **结构判断**: 信源结构如何，高价值内容占比多少
-3. **风险判断**: 主要风险点是什么，结论适用边界在哪里
-
-## 主题分析
-对以下5个主题逐一分析，每主题不超过3句话:
-### 产品与方案
-### 技术成熟度
-### 生态合作
-### 战略动向
-### 市场信号
-
-## 重点对象
-### 目标公司动态
-列出活跃的目标公司及信号数量
-
-## 风险与局限
-明确写出：
-- 样本局限性
-- 信源局限性  
-- 结论适用边界
-
-## 下一步建议
-给出2-3条具体可执行的建议
-
-## 代表证据（3~5条）
-列出最重要的证据，每条包含：标题、来源、日期、为什么重要
-
-【重要要求】
-- **核心原则**: 每句话都要回答"这对我们的业务意味着什么"，禁止信息堆砌
-- 输出"商业洞察判断"，禁止复述原文内容
-- 语言简洁，每段不超过3句
-- 禁止空话套话，如"值得关注"、"需要进一步观察"等无价值表述
-- 如某主题样本<3条，明确写"样本不足"
-- 管理层可快速阅读（报告总长控制在1页内）
-- 报告语言为简体中文`;
+【输出格式严格JSON】：
+{
+  "window_summary": {
+    "overall_judgement": "本期最值得关注的3件事",
+    "signal_density": "high/medium/low",
+    "manager_note": "管理层特别说明"
+  },
+  "top_changes": [...],
+  "phua_impacts": {...},
+  "management_actions": [...]
+}`;
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -172,7 +127,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         messages: [
           {
             role: "system",
-            content: "你是一个专业的商业战略分析顾问。你的核心能力是：从公开信息中提取商业判断，而不是信息摘要。每个判断必须回答：这对目标公司的业务意味着什么？竞争优势如何变化？市场格局如何演进？"
+            content: `你是汽车电子基础软件行业的商业洞察分析专家，服务对象是普华基础软件有限公司的管理层。
+
+你的任务是将动态信息转化为有价值的商业判断，不是复述新闻。
+
+【核心原则】
+1. 不说空话套话，如"行业持续发展、竞争日趋激烈"
+2. 每条结论都要有具体依据
+3. 对普华影响要具体到：竞争威胁、合作机会、产品启发、市场参考
+4. 证据不足时，明确写"证据有限，建议继续跟踪"
+5. 结论措辞要适度：不用"必须/立即/否则"，多用"建议优先评估/建议重点验证/若趋势延续则可能"
+
+【证据边界要求】
+- 如果样本集中于某公司，明确说明"本期洞察主要由[公司]驱动，结论不代表行业整体"
+- 如果只有单条证据，明确说明"样本有限，单条证据仅供参考"
+
+【管理动作格式】
+- 每条管理动作格式："建议[部门]：[具体动作]，原因：[为什么这样做]"
+- 部门分类：产品/平台、市场/售前、生态/合作`
           },
           {
             role: "user",
@@ -190,22 +162,133 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const result = await response.json();
-    const reportMarkdown = result.choices?.[0]?.message?.content || "";
+    const content = result.choices?.[0]?.message?.content || "";
 
-    if (!reportMarkdown) {
-      return res.status(500).json({ error: "Empty response from DeepSeek" });
+    let reportJson = null;
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        reportJson = JSON.parse(jsonMatch[0]);
+      } catch {
+        console.error("JSON parse failed");
+      }
     }
+
+    const isExec = body.report_type === "exec";
+    const displayCompany = body.company_ids?.length === 1 ? getDisplayName(body.company_ids[0]) : null;
+    const reportTitle = displayCompany 
+      ? `普华汽车电子商业洞察观察简报：${displayCompany}（近${body.window_days}天）`
+      : `普华汽车电子商业洞察总览简报（近${body.window_days}天）`;
+    const reportDescription = displayCompany
+      ? `本报告基于近${body.window_days}天 ${displayCompany} 相关公开动态信息生成，用于从普华视角观察该公司的重点动作、潜在影响及建议跟踪方向。`
+      : `本报告基于近${body.window_days}天全部目标公司的公开动态信息生成，用于辅助管理层快速识别行业重点变化、竞争信号与合作机会。`;
+
+    const buildMarkdown = (data: any): string => {
+      const lines: string[] = [];
+      
+      lines.push(`# ${reportTitle}`);
+      lines.push("");
+      lines.push("**【报告说明】**");
+      lines.push(reportDescription);
+      lines.push("");
+      lines.push("---");
+      lines.push("");
+
+      lines.push("## 执行摘要");
+      if (data.window_summary) {
+        if (data.window_summary.overall_judgement) {
+          lines.push(`**核心判断：** ${data.window_summary.overall_judgement}`);
+        }
+        if (data.window_summary.signal_density) {
+          const densityMap: Record<string, string> = { high: "高", medium: "中", low: "低" };
+          lines.push(`**信号强度：** ${densityMap[data.window_summary.signal_density] || data.window_summary.signal_density}`);
+        }
+        if (data.window_summary.manager_note) {
+          lines.push("");
+          lines.push(data.window_summary.manager_note);
+        }
+      }
+      lines.push("");
+
+      lines.push("## 本期重点变化");
+      if (data.top_changes && data.top_changes.length > 0) {
+        data.top_changes.slice(0, 5).forEach((change: any, idx: number) => {
+          lines.push(`${idx + 1}. **${change.title || "无标题"}**`);
+          if (change.judgement) lines.push(`   - 判断：${change.judgement}`);
+          if (change.why_important) lines.push(`   - 重要性：${change.why_important}`);
+          if (change.to_phua_impact) lines.push(`   - 对普华：${change.to_phua_impact}`);
+          if (change.recommended_action) lines.push(`   - 建议：${change.recommended_action}`);
+          lines.push("");
+        });
+      } else {
+        lines.push("暂无重点变化数据");
+        lines.push("");
+      }
+
+      lines.push("## 对普华影响");
+      if (data.phua_impacts) {
+        if (data.phua_impacts.competition_pressure?.length > 0) {
+          lines.push("### 竞争压力");
+          data.phua_impacts.competition_pressure.forEach((item: string) => {
+            lines.push(`- ${item}`);
+          });
+          lines.push("");
+        }
+        if (data.phua_impacts.cooperation_opportunities?.length > 0) {
+          lines.push("### 合作机会");
+          data.phua_impacts.cooperation_opportunities.forEach((item: string) => {
+            lines.push(`- ${item}`);
+          });
+          lines.push("");
+        }
+        if (data.phua_impacts.product_market_reference?.length > 0) {
+          lines.push("### 产品/市场参考");
+          data.phua_impacts.product_market_reference.forEach((item: string) => {
+            lines.push(`- ${item}`);
+          });
+          lines.push("");
+        }
+      }
+
+      lines.push("## 管理动作建议");
+      if (data.management_actions && data.management_actions.length > 0) {
+        data.management_actions.slice(0, 5).forEach((action: any, idx: number) => {
+          lines.push(`${idx + 1}. **${action.department || "未知部门"}**：${action.action || ""}`);
+          if (action.reason) {
+            lines.push(`   - 原因：${action.reason}`);
+          }
+        });
+      } else {
+        lines.push("暂无管理动作建议");
+      }
+      lines.push("");
+
+      lines.push("---");
+      lines.push("*本报告由普华汽车电子商业洞察系统自动生成*");
+
+      return lines.join("\n");
+    };
+
+    const markdown = reportJson ? buildMarkdown(reportJson) : `# 报告生成失败
+
+无法解析 DeepSeek 返回结果，请稍后重试。
+
+原始返回：
+\`\`\`
+${content.substring(0, 500)}
+\`\`\``;
 
     const filename = `insight-report-${body.report_type}-${new Date().toISOString().slice(0, 10)}.md`;
 
     res.status(200).json({
-      report_markdown: reportMarkdown,
+      report_markdown: markdown,
       report_meta: {
         report_type: body.report_type,
         time_range: body.time_range,
+        window_days: body.window_days,
         generated_at: new Date().toISOString(),
         model: DEEPSEEK_MODEL,
-        insight_count: body.summary.total_count,
+        item_count: body.items.length,
         filters: body.filters
       },
       filename
