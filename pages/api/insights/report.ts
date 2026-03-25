@@ -67,10 +67,16 @@ function buildPrompt(data: ReportRequest): string {
     : `本报告基于近${data.window_days}天全部目标公司的公开动态信息生成，用于辅助管理层快速识别行业重点变化、竞争信号与合作机会。`;
 
   const singleCompanyContext = displayCompany
-    ? `\n\n【重点关注公司】本期报告聚焦于 ${displayCompany}。你的分析应以此公司为核心，提及其他公司时只作为对标对象、合作上下文或生态关联对象，不能喧宾夺主。`
+    ? `\n\n【重点关注公司】本期报告聚焦于 ${displayCompany}。你的分析应以此公司为核心，提及其他公司时只作为对标对象，合作上下文或生态关联对象，不能喧宾夺主。`
     : "";
 
-  return `请分析以下近${data.window_days}天的汽车电子行业动态，生成结构化商业洞察报告。${singleCompanyContext}
+  const detailLevel = isExec ? "详细" : "简洁";
+  const topChangesLimit = isExec ? "5" : "3";
+  const managementActionsLimit = isExec ? "5" : "3";
+
+  return `你是汽车电子基础软件行业的商业洞察分析专家，服务对象是普华基础软件有限公司的管理层。
+
+请分析以下近${data.window_days}天的汽车电子行业动态，生成${detailLevel}版商业洞察报告。${singleCompanyContext}
 
 输入数据：
 ${JSON.stringify(data.items, null, 2)}
@@ -80,25 +86,31 @@ ${JSON.stringify(data.items, null, 2)}
 - 涉及目标公司: ${data.meta.companies_count}家
 - 时间范围: 近${data.window_days}天
 
+【核心原则】
+1. 只基于输入证据，不编造
+2. 不说空话套话，如"行业持续发展、竞争日趋激烈"
+3. 每条结论都要有具体依据，具体到公司名、产品名、合作事件名
+4. 对普华影响要具体：影响哪个方面、可能带来什么机会或威胁
+5. 结论措辞要适度：多用"建议优先评估、建议重点验证、若趋势延续则可能"
+6. 如果证据不足或样本集中，明确说明结论边界
+
 【特别要求】
-1. 执行摘要要明确写出"本期最值得管理层关注的3件事是什么"
-2. 重点变化每条都要包含：具体变化内容、对普华的具体影响、建议动作
-3. 对普华影响不要写"值得关注"，要写具体：影响哪个方面、可能带来什么机会或威胁
-4. 管理动作建议要具体到部门和具体事项，如"建议产品/平台团队：跟进XXX技术进展，评估对基础软件的影响"
-5. 如果某方面证据不足，明确写"当前公开信息有限，建议继续跟踪"
-6. 结论措辞要适度：不用"必须/立即/否则"，多用"建议优先评估/建议重点验证/若趋势延续则可能"
-7. 如果样本集中，明确说明结论边界
+1. 执行摘要：明确写出"本期最值得管理层关注的${topChangesLimit}件事"，每件事都要具体到公司名和事件
+2. 重点变化：每条都要包含具体变化内容、对普华的具体影响、建议动作，最多${topChangesLimit}条
+3. 对普华影响：不要写"值得关注"，要写具体影响，如"可能压缩普华在XX公司的市场份额"
+4. 管理动作：要具体到部门，如"建议市场/售前团队：尽快对接XX公司，了解其智能驾驶方案选型计划"
+5. 如果是单公司报告，重点写该公司，其他公司只作为对标/合作对象提及
 
 【输出格式严格JSON】：
 {
   "window_summary": {
-    "overall_judgement": "本期最值得关注的3件事",
+    "overall_judgement": "本期最值得关注的3件事（每件都要具体到公司名和事件）",
     "signal_density": "high/medium/low",
-    "manager_note": "管理层特别说明"
+    "manager_note": "结论边界说明"
   },
-  "top_changes": [...],
-  "phua_impacts": {...},
-  "management_actions": [...]
+  "top_changes": [{ "title": "具体事件标题", "judgement": "判断", "why_important": "为什么重要", "to_phua_impact": "对普华的具体影响", "recommended_action": "建议动作" }],
+  "phua_impacts": { "competition_pressure": [], "cooperation_opportunities": [], "product_market_reference": [] },
+  "management_actions": [{ "department": "部门", "action": "具体动作", "priority": "high/medium/low", "reason": "原因" }]
 }`;
 }
 
