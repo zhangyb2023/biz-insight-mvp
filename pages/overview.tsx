@@ -1,119 +1,109 @@
 import Head from "next/head";
 
-const STEPS = [
-  {
-    step: 1,
-    name: "配置目标",
-    icon: "🎯",
-    description: "确定要跟踪哪些公司和网站",
-    details: [
-      "在\"公司管理\"中添加目标公司",
-      "配置要监控的网页URL",
-      "系统自动匹配爬取策略"
-    ],
-    module: "公司管理",
-    moduleHref: "/console"
-  },
-  {
-    step: 2,
-    name: "策略爬取",
-    icon: "🕷️",
-    description: "根据网页特点定制化爬取",
-    details: [
-      "每类网站有专属解析策略",
-      "Playwright渲染动态内容",
-      "自动提取标题、日期、摘要、链接",
-      "支持多页分页自动翻页"
-    ],
-    module: "工作台 / 智能爬虫系统",
-    moduleHref: "/workbench"
-  },
-  {
-    step: 3,
-    name: "LLM 分类",
-    icon: "🤖",
-    description: "用大模型理解内容语义并分类",
-    details: [
-      "DeepSeek 智能分析每条内容",
-      "产品技术/生态合作/战略动向/政策法规/人才动态",
-      "基于内容语义而非关键词匹配",
-      "准确判断内容商业价值"
-    ],
-    module: "自动进行"
-  },
-  {
-    step: 5,
-    name: "结构化入库",
-    icon: "💾",
-    description: "存储到数据库形成洞察",
-    details: [
-      "保存标题、摘要、原文",
-      "记录来源URL和发布时间",
-      "标记主题分类和置信度",
-      "追踪首次发现和更新时间"
-    ],
-    module: "自动进行"
-  },
-  {
-    step: 6,
-    name: "商业洞察",
-    icon: "💡",
-    description: "生成可行动的洞察结论",
-    details: [
-      "聚合多来源信息形成判断",
-      "识别趋势、风险、机会",
-      "生成下一步行动建议",
-      "按主题分类展示"
-    ],
-    module: "商业洞察",
-    moduleHref: "/insights"
-  }
+const COMPANIES = [
+  { id: "vector", name: "Vector", url: "www.vector.com" },
+  { id: "elektrobit", name: "Elektrobit", url: "www.elektrobit.com" },
+  { id: "tttech-auto", name: "TTTech Auto", url: "www.tttech-auto.com" },
+  { id: "hirain", name: "经纬恒润", url: "www.hirain.com" },
+  { id: "reachauto", name: "东软睿驰", url: "reachauto.com" },
+  { id: "thundersoft", name: "中科创达", url: "www.thundersoft.com" },
+  { id: "huawei-qiankun-auto", name: "华为乾崑", url: "auto.huawei.com" },
+  { id: "semi-drive", name: "芯驰科技", url: "www.semidrive.com" },
+  { id: "black-sesame", name: "黑芝麻智能", url: "www.blacksesame.com" },
+  { id: "etas", name: "ETAS", url: "www.etas.com" },
+  { id: "autosar", name: "AUTOSAR", url: "www.autosar.org" },
+  { id: "gasgoo", name: "盖世汽车", url: "auto.gasgoo.com" },
 ];
 
-const ARCHITECTURE = {
-  title: "系统架构",
-  layers: [
-    {
-      name: "数据来源层",
-      color: "bg-sky-100 border-sky-300",
-      items: ["目标公司官网", "新闻媒体", "行业资讯", "专业社区"]
-    },
-    {
-      name: "策略爬取层",
-      color: "bg-emerald-100 border-emerald-300",
-      items: ["专属策略解析", "Playwright渲染", "自动翻页", "内容提取"]
-    },
-    {
-      name: "LLM分类层",
-      color: "bg-amber-100 border-amber-300",
-      items: ["DeepSeek智能分类", "产品技术", "生态合作", "战略动向/政策法规/人才动态"]
-    },
-    {
-      name: "存储层",
-      color: "bg-violet-100 border-violet-300",
-      items: ["SQLite 数据库", "原始文档", "结构化洞察", "任务记录"]
-    },
-    {
-      name: "展示应用层",
-      color: "bg-rose-100 border-rose-300",
-      items: ["动态信息列表", "系统健康度", "工作台", "公司管理"]
-    }
-  ]
-};
+const CRAWL_STRATEGIES = [
+  { name: "gasgoo_flash", company: "盖世汽车", url: "auto.gasgoo.com/newsflash", tech: "Cheerio + 分页解析", note: "快讯列表，含多页翻页" },
+  { name: "autosar_news", company: "AUTOSAR", url: "www.autosar.org/news-events", tech: "Cheerio + 日期提取", note: "英文新闻，含日期解析" },
+  { name: "thundersoft_news", company: "中科创达", url: "www.thundersoft.com/category/newsroom", tech: "WordPress 结构解析", note: "WordPress CMS" },
+  { name: "huaweiAuto_news", company: "华为乾崑", url: "auto.huawei.com/cn/news", tech: "Cheerio + 详情页抓取", note: "需抓列表+详情页" },
+  { name: "hirain_news", company: "经纬恒润", url: "www.hirain.com/news", tech: "Cheerio + 分页", note: "多页翻页" },
+  { name: "reachauto_news", company: "东软睿驰", url: "reachauto.com/corporate-news", tech: "Cheerio + 双HTML结构", note: "两种列表结构" },
+  { name: "etas_news", company: "ETAS", url: "www.etas.com/ww/en/about-etas/newsroom", tech: "Cheerio + 英文", note: "英文站点" },
+  { name: "vector_news", company: "Vector", url: "www.vector.com/.*/events/overview", tech: "Playwright", note: "动态渲染，需浏览器" },
+  { name: "semidrive_news", company: "芯驰科技", url: "www.semidrive.com/news", tech: "Cheerio + 多页", note: "多页+图片处理" },
+  { name: "elektrobit_news", company: "Elektrobit", url: "www.elektrobit.com/newsroom", tech: "Cheerio + 表格结构", note: "表格布局" },
+  { name: "blacksesame_news", company: "黑芝麻智能", url: "www.blacksesame.com/zh/news-center", tech: "Cheerio + 详情页", note: "需抓详情页日期" },
+  { name: "tttech_auto_news", company: "TTTech Auto", url: "www.tttech-auto.com/newsroom", tech: "Playwright + Cloudflare", note: "动态渲染+反爬" },
+];
+
+const INSIGHT_WORKFLOW = [
+  {
+    phase: "数据采集",
+    icon: "🕷️",
+    steps: [
+      { title: "策略匹配", desc: "根据URL自动匹配爬虫策略" },
+      { title: "页面抓取", desc: "Cheerio静态抓取 / Playwright动态渲染" },
+      { title: "内容提取", desc: "提取标题、日期、摘要、正文、链接" },
+      { title: "质量过滤", desc: "过滤低质量标题（Policy/Menu/空白等）" },
+    ]
+  },
+  {
+    phase: "LLM 分析",
+    icon: "🤖",
+    steps: [
+      { title: "输入处理", desc: "将原始数据格式化为 CompactItem" },
+      { title: "Prompt 构建", desc: "包含系统角色、输出格式强制要求、字段长度限制" },
+      { title: "DeepSeek 调用", desc: "temperature=0.3，强制JSON输出" },
+      { title: "容错解析", desc: "处理 ```json 代码块，提取 { } 区间内容" },
+    ]
+  },
+  {
+    phase: "聚合洞察",
+    icon: "💡",
+    steps: [
+      { title: "generate-brief API", desc: "聚合多源信息，输出 window_summary / top_changes / company_insights / phua_impacts / management_actions" },
+      { title: "范围过滤", desc: "按 company_ids 精确过滤，单公司报告独立生成" },
+      { title: "状态返回", desc: "ok + empty + reason 三元状态，前端明确展示" },
+    ]
+  },
+  {
+    phase: "报告生成",
+    icon: "📄",
+    steps: [
+      { title: "generate-report API", desc: "基于 brief_data 生成 Markdown 格式报告" },
+      { title: "报告类型", desc: "总览简报（全部公司）vs 观察简报（单公司）" },
+      { title: "报告结构", desc: "报告说明 → 执行摘要 → 重点变化 → 公司观察 → 对普华影响 → 管理动作 → 证据附录" },
+    ]
+  },
+];
+
+const TOPIC_TAGS = [
+  { key: "product_tech", label: "产品技术", desc: "新产品/方案发布、技术突破、量产进展" },
+  { key: "ecosystem", label: "生态合作", desc: "战略合作、标准推进、生态绑定" },
+  { key: "strategy", label: "战略动向", desc: "融资、高管变动、组织调整、战略转型" },
+  { key: "policy", label: "政策法规", desc: "法规、标准、认证、监管" },
+  { key: "talent", label: "人才动态", desc: "招聘、人才流动" },
+  { key: "market", label: "行业动态", desc: "市场分析、媒体解读（兜底分类）" },
+];
+
+const EVIDENCE_TYPES = [
+  { key: "all", label: "全部证据" },
+  { key: "official", label: "官方发布" },
+  { key: "product_page", label: "方案产品页" },
+  { key: "case_study", label: "案例页" },
+  { key: "media", label: "媒体报道" },
+  { key: "job", label: "招聘信息" },
+  { key: "document", label: "文档资料" },
+  { key: "full_text", label: "长文本" },
+];
 
 export default function OverviewPage() {
   return (
     <>
       <Head>
-        <title>系统流程总览 | 商业洞察</title>
+        <title>系统总览 | 商业洞察</title>
       </Head>
       <main className="min-h-screen bg-slate-50">
         <header className="bg-white border-b border-slate-200 px-6 py-4">
-          <div className="mx-auto max-w-5xl">
+          <div className="mx-auto max-w-6xl">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-ink">商业洞察系统</h1>
-                <p className="text-sm text-slate-500 mt-1">了解系统如何从网页变成洞察结论</p>
+                <h1 className="text-2xl font-bold text-ink">商业洞察系统总览</h1>
+                <p className="text-sm text-slate-500 mt-1">工作流程、爬虫策略与洞察生成方法</p>
               </div>
               <a href="/" className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -125,9 +115,11 @@ export default function OverviewPage() {
           </div>
         </header>
 
-        <div className="mx-auto max-w-5xl px-6 py-8 space-y-8">
+        <div className="mx-auto max-w-6xl px-6 py-8 space-y-10">
+
+          {/* 一句话说明 */}
           <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">一句话说明</h2>
+            <h2 className="text-lg font-semibold text-ink mb-4">系统定位</h2>
             <div className="rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 p-6">
               <p className="text-lg leading-relaxed text-slate-700">
                 <span className="font-semibold text-emerald-700">商业洞察系统</span> 自动抓取目标公司的公开网页，
@@ -138,8 +130,9 @@ export default function OverviewPage() {
             </div>
           </section>
 
+          {/* 数据流转图 */}
           <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">数据流转图</h2>
+            <h2 className="text-lg font-semibold text-ink mb-4">数据流转</h2>
             <div className="rounded-2xl bg-white border border-slate-200 p-6 overflow-x-auto">
               <div className="flex items-center gap-2 min-w-max">
                 <div className="px-4 py-3 rounded-xl bg-sky-100 border border-sky-300 text-sm font-medium text-sky-700">
@@ -149,369 +142,260 @@ export default function OverviewPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
                 <div className="px-4 py-3 rounded-xl bg-emerald-100 border border-emerald-300 text-sm font-medium text-emerald-700">
-                  🕷️ 爬取
+                  🕷️ 策略爬取
                 </div>
                 <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
                 <div className="px-4 py-3 rounded-xl bg-amber-100 border border-amber-300 text-sm font-medium text-amber-700">
-                  🧹 清洗
+                  🧹 质量过滤
                 </div>
                 <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
                 <div className="px-4 py-3 rounded-xl bg-violet-100 border border-violet-300 text-sm font-medium text-violet-700">
-                  🤖 AI分析
+                  🤖 LLM分析
                 </div>
                 <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
                 <div className="px-4 py-3 rounded-xl bg-rose-100 border border-rose-300 text-sm font-medium text-rose-700">
-                  💡 洞察
+                  💡 洞察输出
                 </div>
               </div>
             </div>
           </section>
 
+          {/* 目标公司 */}
           <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">六步流程详解</h2>
-            <div className="space-y-4">
-              {STEPS.map((step) => (
-                <div key={step.step} className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
-                  <div className="flex items-center gap-4 p-4 border-b border-slate-100">
-                    <div className="flex-shrink-0 w-10 h-10 rounded-full bg-moss/10 flex items-center justify-center text-xl">
-                      {step.icon}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-slate-400">步骤 {step.step}</span>
-                        <h3 className="font-semibold text-ink">{step.name}</h3>
-                      </div>
-                      <p className="text-sm text-slate-600">{step.description}</p>
-                    </div>
-                    {step.moduleHref ? (
-                      <a href={step.moduleHref} className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-slate-100 text-sm font-medium text-slate-600 hover:bg-slate-200">
-                        → {step.module}
-                      </a>
-                    ) : (
-                      <span className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-emerald-50 text-sm font-medium text-emerald-600">
-                        自动进行
-                      </span>
-                    )}
-                  </div>
-                  <div className="p-4 bg-slate-50">
-                    <ul className="grid gap-2 md:grid-cols-2">
-                      {step.details.map((detail, i) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
-                          <span className="text-slate-400">•</span>
-                          {detail}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">系统分层架构</h2>
+            <h2 className="text-lg font-semibold text-ink mb-4">跟踪目标公司（{COMPANIES.length}家）</h2>
             <div className="rounded-2xl bg-white border border-slate-200 p-6">
-              <div className="space-y-4">
-                {ARCHITECTURE.layers.map((layer, idx) => (
-                  <div key={idx}>
-                    <div className={`rounded-lg ${layer.color} border p-3 mb-2`}>
-                      <p className="text-sm font-semibold text-slate-700">{layer.name}</p>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                {COMPANIES.map((company) => (
+                  <div key={company.id} className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <span className="text-lg">🏢</span>
+                    <div>
+                      <p className="text-sm font-medium text-ink">{company.name}</p>
+                      <p className="text-xs text-slate-400">{company.url}</p>
                     </div>
-                    <div className="flex flex-wrap gap-2 pl-4">
-                      {layer.items.map((item, i) => (
-                        <span key={i} className="px-2 py-1 rounded bg-white border border-slate-200 text-xs text-slate-600">
-                          {item}
-                        </span>
-                      ))}
-                    </div>
-                    {idx < ARCHITECTURE.layers.length - 1 && (
-                      <div className="flex justify-center my-2">
-                        <svg className="w-4 h-4 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                        </svg>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
             </div>
           </section>
 
+          {/* 爬虫策略 */}
           <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">使用的平台</h2>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <div className="rounded-xl bg-white border border-slate-200 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">🔍</span>
-                  <h3 className="font-semibold text-ink">Jina Reader</h3>
-                </div>
-                <p className="text-sm text-slate-600">免费网页正文提取</p>
-                <p className="text-xs text-slate-400 mt-1">额度：10,000次/天</p>
+            <h2 className="text-lg font-semibold text-ink mb-4">爬虫策略（{CRAWL_STRATEGIES.length}个）</h2>
+            <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">策略名</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">公司</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">URL模式</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">技术</th>
+                      <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">备注</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {CRAWL_STRATEGIES.map((strategy) => (
+                      <tr key={strategy.name} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 font-mono text-xs text-violet-600">{strategy.name}</td>
+                        <td className="px-4 py-3 text-sm text-ink">{strategy.company}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-500 max-w-xs truncate">{strategy.url}</td>
+                        <td className="px-4 py-3 text-xs text-slate-600">
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600">{strategy.tech}</span>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-400">{strategy.note}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <div className="rounded-xl bg-white border border-slate-200 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">🔥</span>
-                  <h3 className="font-semibold text-ink">Firecrawl</h3>
-                </div>
-                <p className="text-sm text-slate-600">深度抓取结构化内容</p>
-                <p className="text-xs text-slate-400 mt-1">支持整站sitemap抓取</p>
-              </div>
-              <div className="rounded-xl bg-white border border-slate-200 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">🔎</span>
-                  <h3 className="font-semibold text-ink">Tavily</h3>
-                </div>
-                <p className="text-sm text-slate-600">补充搜索发现相关页面</p>
-                <p className="text-xs text-slate-400 mt-1">扩展信息发现渠道</p>
-              </div>
-              <div className="rounded-xl bg-white border border-slate-200 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">🤖</span>
-                  <h3 className="font-semibold text-ink">DeepSeek</h3>
-                </div>
-                <p className="text-sm text-slate-600">LLM 分析内容主题</p>
-                <p className="text-xs text-slate-400 mt-1">判断类型、提取关键信息</p>
-              </div>
-              <div className="rounded-xl bg-white border border-slate-200 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">🌐</span>
-                  <h3 className="font-semibold text-ink">Next.js</h3>
-                </div>
-                <p className="text-sm text-slate-600">前端框架</p>
-                <p className="text-xs text-slate-400 mt-1">页面渲染和路由管理</p>
-              </div>
-              <div className="rounded-xl bg-white border border-slate-200 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">🗄️</span>
-                  <h3 className="font-semibold text-ink">SQLite</h3>
-                </div>
-                <p className="text-sm text-slate-600">本地数据库</p>
-                <p className="text-xs text-slate-400 mt-1">存储洞察和任务记录</p>
-              </div>
-              <div className="rounded-xl bg-white border border-slate-200 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">🎭</span>
-                  <h3 className="font-semibold text-ink">Playwright</h3>
-                </div>
-                <p className="text-sm text-slate-600">浏览器自动化</p>
-                <p className="text-xs text-slate-400 mt-1">补充提取动态页面日期</p>
-              </div>
-              <div className="rounded-xl bg-white border border-slate-200 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">⚙️</span>
-                  <h3 className="font-semibold text-ink">OpenClaw</h3>
-                </div>
-                <p className="text-sm text-slate-600">运维管理平台</p>
-                <p className="text-xs text-slate-400 mt-1">API Keys 安全存储</p>
+              <div className="px-4 py-3 bg-slate-50 border-t border-slate-200">
+                <p className="text-xs text-slate-500">
+                  策略文件位置：<code className="bg-slate-200 px-1 rounded">lib/crawl/strategies/</code>
+                  | 注册文件：<code className="bg-slate-200 px-1 rounded">lib/crawl/strategies/index.ts</code>
+                </p>
               </div>
             </div>
           </section>
 
+          {/* 洞察生成流程 */}
           <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">平台调用关系图</h2>
-            <div className="rounded-2xl bg-white border border-slate-200 p-6 overflow-x-auto">
-              <div className="min-w-max">
-                <div className="flex flex-col items-center gap-1">
-                  <div className="px-5 py-3 rounded-xl bg-indigo-500 text-white text-sm font-semibold shadow-sm">
-                    ⚙️ OpenClaw
+            <h2 className="text-lg font-semibold text-ink mb-4">商业洞察生成流程</h2>
+            <div className="space-y-6">
+              {INSIGHT_WORKFLOW.map((phase) => (
+                <div key={phase.phase} className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+                  <div className="flex items-center gap-3 px-6 py-4 bg-slate-50 border-b border-slate-200">
+                    <span className="text-2xl">{phase.icon}</span>
+                    <h3 className="font-semibold text-ink">{phase.phase}</h3>
                   </div>
-                  <p className="text-xs text-slate-400">总协调</p>
-                </div>
-                <div className="flex justify-center my-2">
-                  <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                  </svg>
-                </div>
-
-                <div className="grid grid-cols-3 gap-6 items-start">
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="px-4 py-3 rounded-xl bg-sky-100 border border-sky-300 text-sm font-medium text-sky-700">
-                      🔍 Jina Reader
-                    </div>
-                    <p className="text-xs text-slate-400 text-center">读取网页正文</p>
-                    <svg className="w-4 h-4 text-slate-300 my-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                    </svg>
-                    <div className="px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-700">
-                      网页内容
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="px-4 py-3 rounded-xl bg-orange-100 border border-orange-300 text-sm font-medium text-orange-700">
-                      🔥 Firecrawl
-                    </div>
-                    <p className="text-xs text-slate-400 text-center">深度抓取<br/>结构化内容</p>
-                    <svg className="w-4 h-4 text-slate-300 my-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                    </svg>
-                    <div className="px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-700">
-                      结构化数据
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="px-4 py-3 rounded-xl bg-violet-100 border border-violet-300 text-sm font-medium text-violet-700">
-                      🔎 Tavily
-                    </div>
-                    <p className="text-xs text-slate-400 text-center">补充搜索<br/>发现更多页面</p>
-                    <svg className="w-4 h-4 text-slate-300 my-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                    </svg>
-                    <div className="px-4 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-700">
-                      关联页面
+                  <div className="p-6">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {phase.steps.map((step, idx) => (
+                        <div key={idx} className="flex items-start gap-3 p-4 rounded-lg bg-slate-50 border border-slate-100">
+                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-moss/10 text-moss text-xs font-medium flex items-center justify-center">
+                            {idx + 1}
+                          </span>
+                          <div>
+                            <p className="text-sm font-medium text-ink">{step.title}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{step.desc}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
-
-                <div className="flex justify-center my-3">
-                  <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                  </svg>
-                </div>
-
-                <div className="grid grid-cols-3 gap-6 items-start">
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="px-4 py-3 rounded-xl bg-amber-100 border border-amber-300 text-sm font-medium text-amber-700">
-                      🎭 Playwright
-                    </div>
-                    <p className="text-xs text-slate-400 text-center">提取动态页面日期</p>
-                    <svg className="w-4 h-4 text-slate-300 my-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                    </svg>
-                    <div className="px-4 py-2 rounded-lg bg-slate-100 border border-slate-300 text-xs text-slate-600">
-                      发布日期
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="px-4 py-3 rounded-xl bg-rose-100 border border-rose-300 text-sm font-medium text-rose-700">
-                      🧹 正文清洗
-                    </div>
-                    <p className="text-xs text-rose-500 font-medium">Cheerio + Readability</p>
-                    <p className="text-xs text-slate-400 text-center">去除广告导航<br/>保留主体内容</p>
-                    <svg className="w-4 h-4 text-slate-300 my-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                    </svg>
-                    <div className="px-4 py-2 rounded-lg bg-slate-100 border border-slate-300 text-xs text-slate-600">
-                      干净文本
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="px-4 py-3 rounded-xl bg-teal-100 border border-teal-300 text-sm font-medium text-teal-700">
-                      🤖 DeepSeek
-                    </div>
-                    <p className="text-xs text-slate-400 text-center">LLM 分析<br/>主题分类</p>
-                    <svg className="w-4 h-4 text-slate-300 my-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                    </svg>
-                    <div className="px-4 py-2 rounded-lg bg-slate-100 border border-slate-300 text-xs text-slate-600">
-                      结构化洞察
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-center my-3">
-                  <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                  </svg>
-                </div>
-
-                <div className="flex justify-center gap-12">
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="px-5 py-3 rounded-xl bg-violet-500 text-white text-sm font-semibold shadow-sm">
-                      🗄️ SQLite
-                    </div>
-                    <p className="text-xs text-slate-400">结构化存储</p>
-                  </div>
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="px-5 py-3 rounded-xl bg-cyan-500 text-white text-sm font-semibold shadow-sm">
-                      🌐 Next.js
-                    </div>
-                    <p className="text-xs text-slate-400">前端展示</p>
-                  </div>
-                </div>
-
-                <div className="flex justify-center my-2">
-                  <svg className="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                  </svg>
-                </div>
-
-                <div className="flex justify-center">
-                  <div className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold shadow-sm">
-                    💡 商业洞察
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
-            <p className="text-xs text-slate-500 mt-3 text-center">OpenClaw 协调各平台采集数据 → 清洗处理 → DeepSeek 分析 → 存入 SQLite → Next.js 展示</p>
           </section>
 
+          {/* 主题分类 */}
           <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">用户视角：我能做什么</h2>
+            <h2 className="text-lg font-semibold text-ink mb-4">主题分类体系</h2>
+            <div className="rounded-2xl bg-white border border-slate-200 p-6">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {TOPIC_TAGS.map((topic) => (
+                  <div key={topic.key} className="p-4 rounded-lg border border-slate-100 bg-slate-50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm font-semibold text-ink">{topic.label}</span>
+                      <code className="text-xs bg-slate-200 px-1.5 rounded text-slate-500">{topic.key}</code>
+                    </div>
+                    <p className="text-xs text-slate-500">{topic.desc}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 p-4 rounded-lg bg-amber-50 border border-amber-200">
+                <p className="text-sm text-amber-800">
+                  <span className="font-medium">分类优先级：</span>
+                  insight_topic_tags → insight_event_type → category/insight_type → market（兜底）
+                </p>
+                <p className="text-xs text-amber-600 mt-1">
+                  mapToTopic() 函数位于 pages/insights.tsx，负责将原始数据映射到主题分类
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* 证据类型 */}
+          <section>
+            <h2 className="text-lg font-semibold text-ink mb-4">证据类型筛选</h2>
+            <div className="rounded-2xl bg-white border border-slate-200 p-6">
+              <div className="flex flex-wrap gap-2">
+                {EVIDENCE_TYPES.map((type) => (
+                  <span key={type.key} className="px-3 py-1.5 rounded-lg bg-slate-100 text-sm text-slate-600">
+                    {type.label}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-slate-400 mt-3">
+                证据类型在 filteredItems useMemo 中通过 getEntityType() 判断，用于筛选不同类型的原始文档
+              </p>
+            </div>
+          </section>
+
+          {/* API 端点 */}
+          <section>
+            <h2 className="text-lg font-semibold text-ink mb-4">核心 API 端点</h2>
+            <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">端点</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">方法</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">功能</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  <tr>
+                    <td className="px-4 py-3 font-mono text-xs text-violet-600">/api/insights/generate-brief</td>
+                    <td className="px-4 py-3"><span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 text-xs">POST</span></td>
+                    <td className="px-4 py-3 text-sm text-slate-600">聚合洞察：window_summary / top_changes / company_insights / phua_impacts / management_actions</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-mono text-xs text-violet-600">/api/insights/generate-report</td>
+                    <td className="px-4 py-3"><span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 text-xs">POST</span></td>
+                    <td className="px-4 py-3 text-sm text-slate-600">Markdown 报告生成，支持传入 brief_data 复用</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-mono text-xs text-violet-600">/api/insights/enrich-one</td>
+                    <td className="px-4 py-3"><span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 text-xs">POST</span></td>
+                    <td className="px-4 py-3 text-sm text-slate-600">单条信息增强，补充 insight_* 字段</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-3 font-mono text-xs text-violet-600">/api/all-items</td>
+                    <td className="px-4 py-3"><span className="px-2 py-0.5 rounded bg-sky-100 text-sky-700 text-xs">GET</span></td>
+                    <td className="px-4 py-3 text-sm text-slate-600">获取全部原始文档列表</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* 低质量过滤规则 */}
+          <section>
+            <h2 className="text-lg font-semibold text-ink mb-4">低质量内容过滤规则</h2>
+            <div className="rounded-2xl bg-white border border-slate-200 p-6">
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-medium text-ink mb-2">isLowQualityTitle() - 标题过滤</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {["Policy", "Menu", "Policy menu", "Read more", "Learn more", "Click here", "导航", "空白标题", "纯日期"].map((item) => (
+                      <span key={item} className="px-2 py-1 rounded bg-red-50 border border-red-200 text-xs text-red-700">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-ink mb-2">LOW_VALUE_PATTERNS - 综合模式</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {["车型报价类", "用户生成内容", "视频内容", "工具类", "评测对比类", "站点首页类", "频道首页类", "版权信息"].map((item) => (
+                      <span key={item} className="px-2 py-1 rounded bg-amber-50 border border-amber-200 text-xs text-amber-700">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium text-ink mb-2">isSiteHomepage() - 首页过滤</h4>
+                  <p className="text-xs text-slate-500">过滤 /index.html、纯域名 URL、/news/、/products/ 等列表页尾</p>
+                </div>
+              </div>
+              <div className="mt-4 p-4 rounded-lg bg-slate-50 border border-slate-200">
+                <p className="text-xs text-slate-500">
+                  过滤函数位于 <code className="bg-slate-200 px-1 rounded">pages/insights.tsx</code>，
+                  同时下沉到 <code className="bg-slate-200 px-1 rounded">generate-brief.ts</code> 和 <code className="bg-slate-200 px-1 rounded">generate-report.ts</code>
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* 快速导航 */}
+          <section>
+            <h2 className="text-lg font-semibold text-ink mb-4">快速导航</h2>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <a href="/insights" className="rounded-2xl bg-emerald-50 border border-emerald-200 p-5 hover:bg-emerald-100 transition-colors">
                 <div className="text-2xl mb-2">💡</div>
-                <h3 className="font-semibold text-emerald-800">看商业洞察</h3>
-                <p className="text-sm text-emerald-600 mt-1">查看系统自动生成的洞察结论、趋势判断和行动建议</p>
+                <h3 className="font-semibold text-emerald-800">商业洞察</h3>
+                <p className="text-sm text-emerald-600 mt-1">查看聚合洞察、核心判断、重点变化</p>
               </a>
               <a href="/workbench" className="rounded-2xl bg-sky-50 border border-sky-200 p-5 hover:bg-sky-100 transition-colors">
-                <div className="text-2xl mb-2">🔍</div>
-                <h3 className="font-semibold text-sky-800">执行爬取</h3>
-                <p className="text-sm text-sky-600 mt-1">选择目标公司，触发系统自动抓取最新信息</p>
+                <div className="text-2xl mb-2">🕷️</div>
+                <h3 className="font-semibold text-sky-800">工作台</h3>
+                <p className="text-sm text-sky-600 mt-1">执行爬取、选择策略、查看结果</p>
               </a>
-              <a href="/health" className="rounded-2xl bg-violet-50 border border-violet-200 p-5 hover:bg-violet-100 transition-colors">
-                <div className="text-2xl mb-2">📋</div>
-                <h3 className="font-semibold text-violet-800">看系统状态</h3>
-                <p className="text-sm text-violet-600 mt-1">检查系统健康度，了解错误分布和优化方向</p>
-              </a>
-              <a href="/console" className="rounded-2xl bg-rose-50 border border-rose-200 p-5 hover:bg-rose-100 transition-colors">
+              <a href="/console" className="rounded-2xl bg-violet-50 border border-violet-200 p-5 hover:bg-violet-100 transition-colors">
                 <div className="text-2xl mb-2">🏢</div>
-                <h3 className="font-semibold text-rose-800">管理目标</h3>
-                <p className="text-sm text-rose-600 mt-1">添加或移除要跟踪的目标公司和网站</p>
-              </a>
-              <a href="/list-all" className="rounded-2xl bg-amber-50 border border-amber-200 p-5 hover:bg-amber-100 transition-colors">
-                <div className="text-2xl mb-2">📰</div>
-                <h3 className="font-semibold text-amber-800">看原始信息</h3>
-                <p className="text-sm text-amber-600 mt-1">浏览所有已采集的原始文档和资讯</p>
-              </a>
-              <a href="/learn" className="rounded-2xl bg-slate-100 border border-slate-200 p-5 hover:bg-slate-200 transition-colors">
-                <div className="text-2xl mb-2">📚</div>
-                <h3 className="font-semibold text-slate-800">学习原理</h3>
-                <p className="text-sm text-slate-600 mt-1">深入了解系统采集和分析的技术原理</p>
+                <h3 className="font-semibold text-violet-800">公司管理</h3>
+                <p className="text-sm text-violet-600 mt-1">配置目标公司和爬取规则</p>
               </a>
             </div>
           </section>
 
-          <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">常见问题</h2>
-            <div className="space-y-3">
-              <details className="rounded-xl bg-white border border-slate-200 p-4">
-                <summary className="font-medium text-ink cursor-pointer">需要我手动输入信息吗？</summary>
-                <p className="mt-2 text-sm text-slate-600">不需要。系统会自动从公开网页抓取信息，您只需要配置要跟踪的目标公司即可。</p>
-              </details>
-              <details className="rounded-xl bg-white border border-slate-200 p-4">
-                <summary className="font-medium text-ink cursor-pointer">多久更新一次数据？</summary>
-                <p className="mt-2 text-sm text-slate-600">每次您点击"执行爬取"时更新。您可以随时触发刷新获取最新信息。</p>
-              </details>
-              <details className="rounded-xl bg-white border border-slate-200 p-4">
-                <summary className="font-medium text-ink cursor-pointer">系统能看到内部信息吗？</summary>
-                <p className="mt-2 text-sm text-slate-600">不能。系统只抓取公开网页，无法访问需要登录或内部系统才能查看的内容。</p>
-              </details>
-              <details className="rounded-xl bg-white border border-slate-200 p-4">
-                <summary className="font-medium text-ink cursor-pointer">发现错误怎么办？</summary>
-                <p className="mt-2 text-sm text-slate-600">可以去"系统健康度"页面查看错误分类，有些错误（如URL失效）需要手动更新配置。</p>
-              </details>
-            </div>
-          </section>
         </div>
       </main>
     </>
