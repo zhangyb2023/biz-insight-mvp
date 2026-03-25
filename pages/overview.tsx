@@ -297,6 +297,213 @@ export default function OverviewPage() {
             </div>
           </section>
 
+          {/* 三大洞察输出详解 */}
+          <section>
+            <h2 className="text-lg font-semibold text-ink mb-4">三大洞察输出详解</h2>
+            <div className="space-y-6">
+
+              {/* 聚合洞察 */}
+              <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+                <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-violet-50 to-purple-50 border-b border-slate-200">
+                  <span className="text-2xl">💡</span>
+                  <div>
+                    <h3 className="font-semibold text-ink">聚合洞察（页面显示）</h3>
+                    <p className="text-xs text-slate-500">页面加载时自动生成，用户进入页面即可见</p>
+                  </div>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
+                      <p className="text-xs font-medium text-slate-500 mb-2">调用时机</p>
+                      <p className="text-sm text-ink">用户访问 /insights 页面时自动调用</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
+                      <p className="text-xs font-medium text-slate-500 mb-2">API 端点</p>
+                      <p className="text-sm text-ink font-mono">/api/insights/generate-brief</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 mb-2">输出内容（5大模块）</p>
+                    <div className="space-y-2">
+                      <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-100">
+                        <span className="text-emerald-600 font-bold text-sm w-36">window_summary</span>
+                        <div>
+                          <p className="text-sm font-medium text-emerald-800">执行摘要</p>
+                          <p className="text-xs text-emerald-600">overall_judgement: 本期最值得关注的3件事</p>
+                          <p className="text-xs text-emerald-600">signal_density: 信号强度（高/中/低）</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 border border-blue-100">
+                        <span className="text-blue-600 font-bold text-sm w-36">top_changes</span>
+                        <div>
+                          <p className="text-sm font-medium text-blue-800">本期重点变化（3-5条）</p>
+                          <p className="text-xs text-blue-600">title/judgement/why_important/to_phua_impact/recommended_action</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-100">
+                        <span className="text-amber-600 font-bold text-sm w-36">phua_impacts</span>
+                        <div>
+                          <p className="text-sm font-medium text-amber-800">对普华影响（三栏）</p>
+                          <p className="text-xs text-amber-600">competition_pressure: 竞争压力</p>
+                          <p className="text-xs text-amber-600">cooperation_opportunities: 合作机会</p>
+                          <p className="text-xs text-amber-600">product_market_reference: 产品/市场参考</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3 p-3 rounded-lg bg-violet-50 border border-violet-100">
+                        <span className="text-violet-600 font-bold text-sm w-36">company_insights</span>
+                        <div>
+                          <p className="text-sm font-medium text-violet-800">重点公司观察</p>
+                          <p className="text-xs text-violet-600">company/signal_level/main_move/business_meaning/to_phua_impact</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-3 p-3 rounded-lg bg-rose-50 border border-rose-100">
+                        <span className="text-rose-600 font-bold text-sm w-36">management_actions</span>
+                        <div>
+                          <p className="text-sm font-medium text-rose-800">管理动作建议</p>
+                          <p className="text-xs text-rose-600">department/action/priority/reason</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                    <p className="text-xs font-medium text-slate-500 mb-2">核心 Prompt 逻辑</p>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      将多条原始新闻聚合成结构化判断，不逐条复述新闻，而是提取商业意义。<br/>
+                      结论边界：单条证据说明"样本有限"，分布集中说明"主要由某公司驱动"。<br/>
+                      措辞要求：多用"建议优先评估/建议重点验证"，不用"必须/立即/否则"。
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 商业洞察报告 */}
+              <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+                <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-slate-200">
+                  <span className="text-2xl">📊</span>
+                  <div>
+                    <h3 className="font-semibold text-ink">商业洞察报告（弹窗生成）</h3>
+                    <p className="text-xs text-slate-500">点击"生成洞察报告"按钮，选择简版/管理层报告后生成</p>
+                  </div>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
+                      <p className="text-xs font-medium text-slate-500 mb-2">调用时机</p>
+                      <p className="text-sm text-ink">用户点击"生成洞察报告"按钮，在弹窗中选择报告类型后调用</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
+                      <p className="text-xs font-medium text-slate-500 mb-2">API 端点</p>
+                      <p className="text-sm text-ink font-mono">/api/insights/report</p>
+                    </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-lg bg-amber-50 border border-amber-100">
+                      <p className="text-xs font-medium text-amber-600 mb-1">📝 简版报告</p>
+                      <p className="text-xs text-amber-600">重点变化 3 条，管理动作 3 条</p>
+                      <p className="text-xs text-amber-600 mt-1">适合快速浏览</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-violet-50 border border-violet-100">
+                      <p className="text-xs font-medium text-violet-600 mb-1">📊 管理层报告</p>
+                      <p className="text-xs text-violet-600">重点变化 5 条，管理动作 5 条</p>
+                      <p className="text-xs text-violet-600 mt-1">适合管理层汇报</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 mb-2">与聚合洞察的区别</p>
+                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="flex items-start gap-2">
+                        <span className="text-emerald-500">✓</span>
+                        <p className="text-xs text-slate-600">传入数据：直接传入原始新闻（compactItems），不是已聚合的二手数据</p>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-emerald-500">✓</span>
+                        <p className="text-xs text-slate-600">Prompt 要求：内容具体到公司名、产品名、事件名</p>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-emerald-500">✓</span>
+                        <p className="text-xs text-slate-600">区分简版/管理层：内容详细程度不同</p>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-emerald-500">✓</span>
+                        <p className="text-xs text-slate-600">输出格式：Markdown</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                    <p className="text-xs font-medium text-slate-500 mb-2">核心 Prompt 逻辑</p>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      直接基于原始新闻生成报告，不是基于聚合洞察再加工。<br/>
+                      每条结论都要有具体依据，具体到公司名、产品名、合作事件名。<br/>
+                      单公司报告：重点写该公司，其他公司只作为对标/合作对象提及。
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Markdown报告 */}
+              <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+                <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-sky-50 to-cyan-50 border-b border-slate-200">
+                  <span className="text-2xl">📥</span>
+                  <div>
+                    <h3 className="font-semibold text-ink">Markdown 报告（下载）</h3>
+                    <p className="text-xs text-slate-500">点击"下载 Markdown 报告"按钮，直接下载文件</p>
+                  </div>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
+                      <p className="text-xs font-medium text-slate-500 mb-2">调用时机</p>
+                      <p className="text-sm text-ink">用户点击"下载 Markdown 报告"按钮，直接下载</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
+                      <p className="text-xs font-medium text-slate-500 mb-2">API 端点</p>
+                      <p className="text-sm text-ink font-mono">/api/insights/generate-report</p>
+                    </div>
+                  </div>
+
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-100">
+                      <p className="text-xs font-medium text-emerald-600 mb-1">✅ 优先复用 brief_data</p>
+                      <p className="text-xs text-emerald-600">当页面已有聚合洞察时，直接复用，不重新调用 DeepSeek</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-amber-50 border border-amber-100">
+                      <p className="text-xs font-medium text-amber-600 mb-1">📋 报告结构</p>
+                      <p className="text-xs text-amber-600">报告说明 → 执行摘要 → 重点变化 → 对普华影响 → 管理动作</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium text-slate-500 mb-2">与商业洞察报告的区别</p>
+                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="flex items-start gap-2">
+                        <span className="text-emerald-500">✓</span>
+                        <p className="text-xs text-slate-600">数据来源：复用页面已生成的聚合洞察（brief_data）</p>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-emerald-500">✓</span>
+                        <p className="text-xs text-slate-600">不需要重新调用 DeepSeek，节省 API 成本</p>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-emerald-500">✓</span>
+                        <p className="text-xs text-slate-600">内容与页面聚合洞察一致，只是 Markdown 格式</p>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="text-emerald-500">✓</span>
+                        <p className="text-xs text-slate-600">报告类型：总览简报（全部公司）/ 观察简报（单公司）</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </section>
+
           {/* API 端点 */}
           <section>
             <h2 className="text-lg font-semibold text-ink mb-4">核心 API 端点</h2>
