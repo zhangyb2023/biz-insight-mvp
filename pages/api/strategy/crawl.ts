@@ -14,6 +14,9 @@ const handler: NextApiHandler = async (req, res) => {
     return res.status(400).json({ error: "URL is required" });
   }
 
+  const startTime = new Date();
+  const db = getDb();
+
   try {
     const strategy = findStrategyForUrl(url);
     
@@ -24,6 +27,15 @@ const handler: NextApiHandler = async (req, res) => {
     const result = await strategy.crawl(url, { pages: pages || [1, 2, 3] });
 
     if (!result.success) {
+      const endTime = new Date();
+      const durationMs = endTime.getTime() - startTime.getTime();
+      db.prepare(`
+        INSERT INTO crawl_jobs (trigger_type, status, started_at, ended_at, duration_ms, company_count, url_count, success_count, failure_count, cache_hit_count, changed_count, insight_count, config_snapshot_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        'api', 'failed', startTime.toISOString(), endTime.toISOString(), durationMs,
+        1, 1, 0, 1, 0, 0, 0, JSON.stringify({ url, pages })
+      );
       return res.status(500).json({ error: result.error || "Crawl failed" });
     }
 
@@ -49,8 +61,7 @@ const handler: NextApiHandler = async (req, res) => {
         console.error("LLM classification failed:", llmError);
       }
     }
-
-    const db = getDb();
+    
     const source = db.prepare("SELECT * FROM sources WHERE url = ?").get(url) as any;
     
     if (source) {
@@ -73,6 +84,19 @@ const handler: NextApiHandler = async (req, res) => {
       db.prepare("UPDATE sources SET fetch_date = ? WHERE id = ?").run(now, source.id);
     }
 
+    const endTime = new Date();
+    const durationMs = endTime.getTime() - startTime.getTime();
+    const successCount = extractedItems.length;
+    const changedCount = successCount > 0 ? 1 : 0;
+
+    db.prepare(`
+      INSERT INTO crawl_jobs (trigger_type, status, started_at, ended_at, duration_ms, company_count, url_count, success_count, failure_count, cache_hit_count, changed_count, insight_count, config_snapshot_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'api', 'success', startTime.toISOString(), endTime.toISOString(), durationMs,
+      1, 1, successCount, 0, 0, changedCount, 0, JSON.stringify({ url, pages })
+    );
+
     return res.status(200).json({
       success: true,
       data: {
@@ -81,6 +105,15 @@ const handler: NextApiHandler = async (req, res) => {
       }
     });
   } catch (error) {
+    const endTime = new Date();
+    const durationMs = endTime.getTime() - startTime.getTime();
+    db.prepare(`
+      INSERT INTO crawl_jobs (trigger_type, status, started_at, ended_at, duration_ms, company_count, url_count, success_count, failure_count, cache_hit_count, changed_count, insight_count, config_snapshot_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'api', 'failed', startTime.toISOString(), endTime.toISOString(), durationMs,
+      1, 1, 0, 1, 0, 0, 0, JSON.stringify({ url, pages })
+    );
     return res.status(500).json({ error: String(error) });
   }
 };
