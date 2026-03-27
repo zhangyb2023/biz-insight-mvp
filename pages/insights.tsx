@@ -115,7 +115,6 @@ const LOW_VALUE_PATTERNS = [
   { pattern: /sidebar|侧边栏|页脚|footer|header/i, reason: "页面框架元素", priority: "low" },
   { pattern: /^read more|^learn more|^click here|^more info/i, reason: "通用链接文字", priority: "low" },
   { pattern: /^\s*$/, reason: "空白标题", priority: "low" },
-  { pattern: /copyright|©|版权所有|保留所有权利/i, reason: "版权信息", priority: "low" },
 ];
 
 function isSiteHomepage(url: string, title: string): boolean {
@@ -138,6 +137,7 @@ function isLowQualityTitle(title: string): boolean {
   if (/^(read more|learn more|click here|more info)$/i.test(lower)) return true;
   if (/^[\d\-\/\.]+$/.test(lower)) return true;
   if (/(sidebar|侧边栏|页脚|footer|header)/i.test(title)) return true;
+  if (/copyright|©|版权所有|保留所有权利/i.test(lower) && lower.length < 50) return true;
   return false;
 }
 
