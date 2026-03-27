@@ -274,3 +274,22 @@ npm run verify:source-quality
 ## 备注
 
 这个仓库当前最重要的资产不是“代码是否最优雅”，而是“已经形成了一条可运行、可展示、可复用的商业洞察链路”。后续所有工程治理，都应该以保护这条链路为前提。
+
+---
+
+## 变更记录 (Changelog)
+
+### 2026-03-27
+
+| 修复内容 | 说明 |
+|---------|------|
+| 修复爬取任务未记录到crawl_jobs表 | 工作台爬取后，任务中心和系统健康度现在能正确显示爬取记录 |
+| 移除copyright对summary的误判 | 正常新闻的summary中包含版权声明不再被错误标记为low优先级 |
+| 增加generate-brief默认limit | 从50增加到200，确保聚合洞察能覆盖更多公司的数据 |
+| 更新数据库备份 | 包含当日爬取的最新数据 |
+
+### 修复文件
+
+- `pages/api/strategy/crawl.ts` - 爬取任务记录
+- `pages/insights.tsx` - copyright误判修复
+- `pages/api/insights/generate-brief.ts` - limit参数调整
