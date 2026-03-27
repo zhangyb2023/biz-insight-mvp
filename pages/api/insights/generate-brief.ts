@@ -434,7 +434,7 @@ const handler: NextApiHandler = async (req, res) => {
   const input = req.body as BriefInput;
   const windowDays = input.window_days || 7;
   const companyIds = input.company_ids;
-  const limit = input.limit || 50;
+  const limit = input.limit || 200;
 
   if (![7, 30, 90].includes(windowDays)) {
     return res.status(400).json({ ok: false, error: "window_days must be 7, 30, or 90" });
