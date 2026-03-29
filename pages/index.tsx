@@ -34,6 +34,14 @@ const modules = [
     color: "bg-emerald-600"
   },
   {
+    id: "api-status",
+    name: "API 状态监控",
+    description: "实时监控 AI 模型和 API 服务状态，包括 DeepSeek、SiliconFlow 等",
+    href: "/api-status",
+    icon: "📊",
+    color: "bg-cyan-600"
+  },
+  {
     id: "workbench",
     name: "工作台",
     description: "选择公司执行智能爬取，支持单选和多选，实时显示进度和关键指标",

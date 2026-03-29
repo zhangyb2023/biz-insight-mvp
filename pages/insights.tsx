@@ -1,5 +1,5 @@
 import Head from "next/head";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 
 type InsightItem = {
   company_name: string;
@@ -821,6 +821,7 @@ export default function InsightsPage() {
       to_phua_impact: string;
       recommended_action: string;
       evidence_count: number;
+      scientific_confidence?: number;
     }>;
     company_insights: Array<{
       company: string;
@@ -846,6 +847,8 @@ export default function InsightsPage() {
   const [briefError, setBriefError] = useState<string | null>(null);
   const [briefEmpty, setBriefEmpty] = useState(false);
 
+  const briefRequestIdRef = useRef<number>(0);
+
   // 调用 generate-brief API
   useEffect(() => {
     const windowDaysMap: Record<TimeRange, number> = {
@@ -854,6 +857,9 @@ export default function InsightsPage() {
       "90d": 90
     };
     const windowDays = windowDaysMap[timeRange];
+
+    const requestId = ++briefRequestIdRef.current;
+    const abortController = new AbortController();
 
     setBriefLoading(true);
     setBriefError(null);
@@ -867,10 +873,12 @@ export default function InsightsPage() {
         window_days: windowDays, 
         limit: 50,
         company_ids: selectedCompanyIds.length > 0 ? selectedCompanyIds : undefined
-      })
+      }),
+      signal: abortController.signal
     })
       .then(res => res.json())
       .then(data => {
+        if (requestId !== briefRequestIdRef.current) return;
         if (data.ok) {
           setBriefData(data.result);
           setBriefEmpty(data.empty === true);
@@ -880,12 +888,19 @@ export default function InsightsPage() {
         }
       })
       .catch(err => {
+        if (err.name === "AbortError") return;
+        if (requestId !== briefRequestIdRef.current) return;
         setBriefError("网络异常，请检查网络连接");
         setBriefEmpty(false);
       })
       .finally(() => {
+        if (requestId !== briefRequestIdRef.current) return;
         setBriefLoading(false);
       });
+
+    return () => {
+      abortController.abort();
+    };
   }, [timeRange, selectedCompanyIds]);
 
   useEffect(() => {
@@ -1324,7 +1339,26 @@ export default function InsightsPage() {
                   <div className="space-y-4">
                     {briefData.top_changes.slice(0, 5).map((change, idx) => (
                       <div key={idx} className="border-l-4 border-violet-400 pl-4 space-y-2">
-                        <p className="text-sm font-medium text-ink">{change.title}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium text-ink">{change.title}</p>
+                          {change.scientific_confidence !== undefined ? (
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${
+                              change.scientific_confidence >= 60 ? "bg-emerald-100 text-emerald-700" :
+                              change.scientific_confidence >= 50 ? "bg-amber-100 text-amber-700" :
+                              "bg-slate-100 text-slate-600"
+                            }`}>
+                              置信率: {change.scientific_confidence}%
+                            </span>
+                          ) : (
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${
+                              change.evidence_count >= 3 ? "bg-emerald-100 text-emerald-700" :
+                              change.evidence_count >= 2 ? "bg-amber-100 text-amber-700" :
+                              "bg-slate-100 text-slate-600"
+                            }`}>
+                              置信率: {Math.min(95, 50 + (change.evidence_count || 0) * 15)}%
+                            </span>
+                          )}
+                        </div>
                         {change.judgement && (
                           <p className="text-xs text-slate-600">{change.judgement}</p>
                         )}
@@ -1350,6 +1384,36 @@ export default function InsightsPage() {
                         )}
                       </div>
                     ))}
+                  </div>
+                  {/* 引用来源表格 */}
+                  <div className="mt-4 pt-4 border-t border-slate-200">
+                    <p className="text-xs font-medium text-slate-500 mb-2">📚 引用来源（共{filteredItems.length}条）</p>
+                    <div className="max-h-48 overflow-y-auto rounded border border-slate-200">
+                      <table className="min-w-full text-xs">
+                        <thead className="bg-slate-50 sticky top-0">
+                          <tr>
+                            <th className="px-2 py-1 text-left text-slate-500">日期</th>
+                            <th className="px-2 py-1 text-left text-slate-500">公司</th>
+                            <th className="px-2 py-1 text-left text-slate-500">标题</th>
+                            <th className="px-2 py-1 text-left text-slate-500">来源</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filteredItems.map((item: any, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50">
+                              <td className="px-2 py-1 text-slate-500">{formatDateShort(item.published_at)}</td>
+                              <td className="px-2 py-1 text-slate-700">{item.company_name}</td>
+                              <td className="px-2 py-1">
+                                <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-moss hover:underline">
+                                  {item.title?.substring(0, 30)}{item.title?.length > 30 ? "..." : ""}
+                                </a>
+                              </td>
+                              <td className="px-2 py-1 text-slate-500">{extractDomain(item.url)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </section>
               )}

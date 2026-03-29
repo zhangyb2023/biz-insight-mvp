@@ -47,6 +47,7 @@ type CompactItem = {
   summary: string;
   date: string;
   category: string;
+  url: string;
 };
 
 const LOW_VALUE_TITLE_PATTERNS = [
@@ -89,6 +90,7 @@ type TopChange = {
   to_phua_impact: string;
   recommended_action: string;
   evidence_count: number;
+  scientific_confidence?: number;
 };
 
 type CompanyInsight = {
@@ -238,6 +240,256 @@ function parseDate(dateStr: string): string | null {
   // This won't match YYYY-MM-DD comparison, but fetch_date is ISO so it works
   
   return dateStr;
+}
+
+type ConfidenceBreakdown = {
+  base: number;
+  evidence_score: number;
+  diversity_company_score: number;
+  diversity_media_score: number;
+  recency_score: number;
+  final: number;
+};
+
+function extractDomain(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.hostname.replace(/^www\./, "");
+  } catch {
+    return "unknown";
+  }
+}
+
+function extractKeywords(text: string): string[] {
+  const keywords: string[] = [];
+  const chineseCompanies = ["华为", "乾崑", "小马智行", "法雷奥", "速腾聚创", "RoboSense", "东风", "经纬恒润", "东软睿驰", "中科创达", "芯驰", "黑芝麻", "地平线", "大疆", "禾赛", "Mobileye", "英伟达", "高通", "特斯拉", "比亚迪", "蔚来", "小鹏", "理想"];
+  const techTerms = ["激光雷达", "lidar", "毫米波", "雷达", "智驾", "自动驾驶", "辅助驾驶", "芯片", "SoC", "域控制器", "OTA", "NOA", "城市NOA", "行泊一体", "舱驾融合", "底座", "中间件", "AUTOSAR", "操作系统", "软件定义"];
+
+  for (const c of chineseCompanies) {
+    if (text.includes(c)) keywords.push(c);
+  }
+  for (const t of techTerms) {
+    if (text.toLowerCase().includes(t.toLowerCase())) keywords.push(t);
+  }
+  return [...new Set(keywords)];
+}
+
+const SILICONFLOW_API_KEY_REGEX = /SILICONFLOW_API_KEY="([^"]+)"/;
+
+function getSiliconFlowApiKey(): string | null {
+  try {
+    const envContent = fs.readFileSync(".env.local", "utf8");
+    const match = envContent.match(SILICONFLOW_API_KEY_REGEX);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+async function getEmbedding(text: string, apiKey: string): Promise<number[]> {
+  const response = await fetch("https://api.siliconflow.cn/v1/embeddings", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: "BAAI/bge-large-zh-v1.5",
+      input: text.slice(0, 500)
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`SiliconFlow API error: ${response.status}`);
+  }
+
+  const data = await response.json() as {
+    data: Array<{ embedding: number[] }>;
+  };
+
+  return data.data[0]?.embedding || [];
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length || a.length === 0) return 0;
+
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+  if (denominator === 0) return 0;
+
+  return dot / denominator;
+}
+
+const SIMILARITY_THRESHOLD = 0.55;
+
+async function calculateScientificConfidence(
+  topChange: TopChange,
+  items: CompactItem[],
+  apiKey: string | null
+): Promise<{ confidence: number; breakdown: ConfidenceBreakdown; embedding_used: boolean }> {
+  const topChangeText = `${topChange.title} ${topChange.judgement} ${topChange.affected_companies.join(" ")} ${topChange.related_topics.join(" ")}`;
+
+  const keywords = extractKeywords(topChangeText);
+  if (keywords.length === 0) {
+    return {
+      confidence: 0.30,
+      breakdown: { base: 0.30, evidence_score: 0, diversity_company_score: 0, diversity_media_score: 0, recency_score: 0, final: 0.30 },
+      embedding_used: false
+    };
+  }
+
+  const base = 0.30;
+
+  if (!apiKey) {
+    const fallbackMatchedItems: CompactItem[] = [];
+    for (const item of items) {
+      const itemText = `${item.title} ${item.summary} ${item.company}`.toLowerCase();
+      const matched = keywords.some(kw => itemText.includes(kw.toLowerCase()));
+      if (matched) {
+        fallbackMatchedItems.push(item);
+      }
+    }
+    return calculateFallbackConfidence(fallbackMatchedItems, base);
+  }
+
+  try {
+    const topChangeEmbedding = await getEmbedding(topChangeText, apiKey);
+    if (topChangeEmbedding.length === 0) {
+      return {
+        confidence: base,
+        breakdown: { base, evidence_score: 0, diversity_company_score: 0, diversity_media_score: 0, recency_score: 0, final: base },
+        embedding_used: false
+      };
+    }
+
+    const itemEmbeddings: { item: CompactItem; embedding: number[]; similarity: number }[] = [];
+
+    for (const item of items) {
+      const itemText = `${item.title} ${item.summary}`;
+      const itemEmbedding = await getEmbedding(itemText, apiKey);
+
+      if (itemEmbedding.length > 0) {
+        const similarity = cosineSimilarity(topChangeEmbedding, itemEmbedding);
+        if (similarity >= SIMILARITY_THRESHOLD) {
+          itemEmbeddings.push({ item, embedding: itemEmbedding, similarity });
+        }
+      }
+    }
+
+    itemEmbeddings.sort((a, b) => b.similarity - a.similarity);
+
+    const uniqueUrls = [...new Map(itemEmbeddings.map(he => [he.item.url, he])).values()];
+    const evidenceCount = uniqueUrls.length;
+
+    const evidence_score = Math.min(0.40, evidenceCount * 0.10);
+
+    const companySet = new Set(uniqueUrls.filter(he => he.item.company_id).map(he => he.item.company_id));
+    const diversity_company_score = companySet.size >= 2 ? 0.15 : 0;
+
+    const mediaSet = new Set(uniqueUrls.map(he => extractDomain(he.item.url)));
+    const diversity_media_score = mediaSet.size >= 2 ? 0.15 : 0;
+
+    console.log(`[Diversity Debug] "${topChange.title}" | URLs=${evidenceCount}, company_ids=${[...companySet]}, domains=${[...mediaSet]}`);
+
+    let recency_score = 0;
+    if (evidenceCount > 0) {
+      const now = new Date();
+      const dates = uniqueUrls
+        .map(he => {
+          const d = parseDate(he.item.date);
+          return d ? new Date(d) : null;
+        })
+        .filter((d): d is Date => d !== null)
+        .sort((a, b) => b.getTime() - a.getTime());
+
+      if (dates.length > 0) {
+        const daysAgo = (now.getTime() - dates[0].getTime()) / (1000 * 60 * 60 * 24);
+        if (daysAgo <= 7) recency_score = 0.10;
+        else if (daysAgo <= 30) recency_score = 0.05;
+      }
+    }
+
+    const final = Math.min(0.95, base + evidence_score + diversity_company_score + diversity_media_score + recency_score);
+
+    return {
+      confidence: final,
+      breakdown: {
+        base,
+        evidence_score,
+        diversity_company_score,
+        diversity_media_score,
+        recency_score,
+        final
+      },
+      embedding_used: true
+    };
+  } catch (error) {
+    console.error("Embedding-based confidence calculation failed, falling back:", error);
+    const fallbackMatchedItems: CompactItem[] = [];
+    for (const item of items) {
+      const itemText = `${item.title} ${item.summary} ${item.company}`.toLowerCase();
+      const matched = keywords.some(kw => itemText.includes(kw.toLowerCase()));
+      if (matched) {
+        fallbackMatchedItems.push(item);
+      }
+    }
+    return { ...calculateFallbackConfidence(fallbackMatchedItems, base), embedding_used: false };
+  }
+}
+
+function calculateFallbackConfidence(matchedItems: CompactItem[], base: number): { confidence: number; breakdown: ConfidenceBreakdown; embedding_used: boolean } {
+  const uniqueUrls = [...new Set(matchedItems.map(i => i.url))];
+  const evidenceCount = uniqueUrls.length;
+
+  const evidence_score = Math.min(0.40, evidenceCount * 0.10);
+
+  const companySet = new Set(matchedItems.filter(i => i.company_id).map(i => i.company_id));
+  const diversity_company_score = companySet.size >= 2 ? 0.15 : 0;
+
+  const mediaSet = new Set(uniqueUrls.map(u => extractDomain(u)));
+  const diversity_media_score = mediaSet.size >= 2 ? 0.15 : 0;
+
+  let recency_score = 0;
+  if (evidenceCount > 0) {
+    const now = new Date();
+    const dates = matchedItems
+      .map(i => {
+        const d = parseDate(i.date);
+        return d ? new Date(d) : null;
+      })
+      .filter((d): d is Date => d !== null)
+      .sort((a, b) => b.getTime() - a.getTime());
+
+    if (dates.length > 0) {
+      const daysAgo = (now.getTime() - dates[0].getTime()) / (1000 * 60 * 60 * 24);
+      if (daysAgo <= 7) recency_score = 0.10;
+      else if (daysAgo <= 30) recency_score = 0.05;
+    }
+  }
+
+  const final = Math.min(0.95, base + evidence_score + diversity_company_score + diversity_media_score + recency_score);
+
+  return {
+    confidence: final,
+    breakdown: {
+      base,
+      evidence_score,
+      diversity_company_score,
+      diversity_media_score,
+      recency_score,
+      final
+    },
+    embedding_used: false
+  };
 }
 
 function normalizeResult(raw: any): BriefResult {
@@ -468,6 +720,7 @@ const handler: NextApiHandler = async (req, res) => {
     summary: (item.summary || "").substring(0, 200),
     date: parseDate(item.published_at || item.fetch_date || "") || "",
     category: item.category || item.insight_type || "战略动向",
+    url: item.url || "",
   }));
 
   const highQualityCompactItems = filterHighQualityItems(compactItems);
@@ -523,6 +776,17 @@ const handler: NextApiHandler = async (req, res) => {
 
   try {
     const {result} = await callDeepSeek(apiKey, windowDays, highQualityCompactItems, isSingleCompany, displayCompanyName);
+
+    for (const topChange of result.top_changes) {
+      const siliconFlowKey = getSiliconFlowApiKey();
+      const { confidence, breakdown } = await calculateScientificConfidence(topChange, highQualityCompactItems, siliconFlowKey);
+      topChange.scientific_confidence = Math.round(confidence * 100);
+      topChange.evidence_count = breakdown.evidence_score > 0 ? Math.round(breakdown.evidence_score / 0.10) : topChange.evidence_count;
+
+      const evidenceCount = breakdown.evidence_score > 0 ? Math.round(breakdown.evidence_score / 0.10) : 0;
+      console.log(`[Confidence] "${topChange.title}" | base=${breakdown.base} + evidence=${breakdown.evidence_score}(${evidenceCount} URLs) + company_div=${breakdown.diversity_company_score} + media_div=${breakdown.diversity_media_score} + recency=${breakdown.recency_score} = ${breakdown.final} (${Math.round(breakdown.final * 100)}%)`);
+    }
+
     return res.status(200).json({
       ok: true,
       meta,

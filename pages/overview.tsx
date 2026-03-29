@@ -1,104 +1,1052 @@
 import Head from "next/head";
+import { useState, useEffect } from "react";
 
-const COMPANIES = [
-  { id: "vector", name: "Vector", url: "www.vector.com" },
-  { id: "elektrobit", name: "Elektrobit", url: "www.elektrobit.com" },
-  { id: "tttech-auto", name: "TTTech Auto", url: "www.tttech-auto.com" },
-  { id: "hirain", name: "经纬恒润", url: "www.hirain.com" },
-  { id: "reachauto", name: "东软睿驰", url: "reachauto.com" },
-  { id: "thundersoft", name: "中科创达", url: "www.thundersoft.com" },
-  { id: "huawei-qiankun-auto", name: "华为乾崑", url: "auto.huawei.com" },
-  { id: "semi-drive", name: "芯驰科技", url: "www.semidrive.com" },
-  { id: "black-sesame", name: "黑芝麻智能", url: "www.blacksesame.com" },
-  { id: "etas", name: "ETAS", url: "www.etas.com" },
-  { id: "autosar", name: "AUTOSAR", url: "www.autosar.org" },
-  { id: "gasgoo", name: "盖世汽车", url: "auto.gasgoo.com" },
-];
+interface LLMTrace {
+  id: number;
+  prompt_version: string;
+  model_name: string;
+  status: string;
+  llm_confidence: number | null;
+  created_at: string;
+  company_id: string;
+  doc_url: string;
+  doc_title: string;
+  insight_id: number | null;
+  insight_summary: string | null;
+  insight_confidence: number | null;
+  insight_category: string | null;
+  item_count: number;
+  input_preview: any[];
+  raw_response: string;
+}
 
-const CRAWL_STRATEGIES = [
-  { name: "gasgoo_flash", company: "盖世汽车", url: "auto.gasgoo.com/newsflash", tech: "Cheerio + 分页解析", note: "快讯列表，含多页翻页" },
-  { name: "autosar_news", company: "AUTOSAR", url: "www.autosar.org/news-events", tech: "Cheerio + 日期提取", note: "英文新闻，含日期解析" },
-  { name: "thundersoft_news", company: "中科创达", url: "www.thundersoft.com/category/newsroom", tech: "WordPress 结构解析", note: "WordPress CMS" },
-  { name: "huaweiAuto_news", company: "华为乾崑", url: "auto.huawei.com/cn/news", tech: "Cheerio + 详情页抓取", note: "需抓列表+详情页" },
-  { name: "hirain_news", company: "经纬恒润", url: "www.hirain.com/news", tech: "Cheerio + 分页", note: "多页翻页" },
-  { name: "reachauto_news", company: "东软睿驰", url: "reachauto.com/corporate-news", tech: "Cheerio + 双HTML结构", note: "两种列表结构" },
-  { name: "etas_news", company: "ETAS", url: "www.etas.com/ww/en/about-etas/newsroom", tech: "Cheerio + 英文", note: "英文站点" },
-  { name: "vector_news", company: "Vector", url: "www.vector.com/.*/events/overview", tech: "Playwright", note: "动态渲染，需浏览器" },
-  { name: "semidrive_news", company: "芯驰科技", url: "www.semidrive.com/news", tech: "Cheerio + 多页", note: "多页+图片处理" },
-  { name: "elektrobit_news", company: "Elektrobit", url: "www.elektrobit.com/newsroom", tech: "Cheerio + 表格结构", note: "表格布局" },
-  { name: "blacksesame_news", company: "黑芝麻智能", url: "www.blacksesame.com/zh/news-center", tech: "Cheerio + 详情页", note: "需抓详情页日期" },
-  { name: "tttech_auto_news", company: "TTTech Auto", url: "www.tttech-auto.com/newsroom", tech: "Playwright + Cloudflare", note: "动态渲染+反爬" },
-];
+function ConfidenceBadge({ confidence }: { confidence: number | null }) {
+  if (confidence === null || confidence === undefined) {
+    return <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-xs">无数据</span>;
+  }
+  const level = confidence >= 0.6 ? "高" : confidence >= 0.5 ? "中" : "低";
+  const color = confidence >= 0.6 ? "emerald" : confidence >= 0.5 ? "amber" : "rose";
+  const colorClass = {
+    emerald: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    amber: "bg-amber-100 text-amber-700 border-amber-200",
+    rose: "bg-rose-100 text-rose-700 border-rose-200",
+  }[color];
+  return (
+    <span className={`px-2 py-0.5 rounded border text-xs font-medium ${colorClass}`}>
+      {level} ({confidence.toFixed(2)})
+    </span>
+  );
+}
 
-const INSIGHT_WORKFLOW = [
-  {
-    phase: "原始数据",
-    icon: "📰",
-    steps: [
-      { title: "61条原始新闻", desc: "从12家目标公司官网抓取的原始信息" },
-      { title: "标题+摘要+日期+来源", desc: "每条包含：title, summary, date, company, url" },
-    ]
-  },
-  {
-    phase: "质量过滤",
-    icon: "🧹",
-    steps: [
-      { title: "低质量标题过滤", desc: "过滤 Policy/Menu/Read more/空白标题" },
-      { title: "首页过滤", desc: "过滤 /index.html、列表页尾" },
-      { title: "格式化 CompactItem", desc: "统一字段格式，准备输入 LLM" },
-    ]
-  },
-  {
-    phase: "LLM 分类",
-    icon: "🏷️",
-    steps: [
-      { title: "DeepSeek 分类", desc: "判断每条新闻属于哪个类别" },
-      { title: "5大分类", desc: "产品技术/生态合作/战略动向/政策法规/人才动态" },
-      { title: "降噪过滤", desc: "过滤低质量标题（Policy/Menu/Read more等）" },
-    ]
-  },
-  {
-    phase: "LLM 聚合",
-    icon: "🤖",
-    steps: [
-      { title: "DeepSeek 分析", desc: "基于 Prompt 规则，将多条聚合成结构化判断" },
-      { title: "生成洞察", desc: "输出 window_summary / top_changes / phua_impacts" },
-      { title: "管理建议", desc: "落到具体部门（产品/平台、市场/售前、生态/合作）" },
-    ]
-  },
-  {
-    phase: "结构化输出",
-    icon: "💡",
-    steps: [
-      { title: "window_summary", desc: "执行摘要：3件最值得关注的事" },
-      { title: "top_changes", desc: "重点变化：3-5条具体变化及影响" },
-      { title: "phua_impacts", desc: "对普华影响：竞争压力/合作机会/市场参考" },
-      { title: "management_actions", desc: "管理动作：谁做什么，为什么" },
-    ]
-  },
-];
+function PipelineStage({
+  stage,
+  icon,
+  summary,
+  purpose,
+  input,
+  output,
+  tools,
+  rules,
+  details,
+  whitebox,
+  example,
+  color,
+  bg,
+  border,
+}: {
+  stage: string;
+  icon?: string;
+  summary: string;
+  purpose: string;
+  input: string[];
+  output: string[];
+  tools: string[];
+  rules: string[];
+  details: string[];
+  whitebox: string;
+  example?: { before?: string; after?: string; note?: string };
+  color: string;
+  bg: string;
+  border: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
 
-const TOPIC_TAGS = [
-  { key: "product_tech", label: "产品技术", desc: "新产品/方案发布、技术突破、量产进展" },
-  { key: "ecosystem", label: "生态合作", desc: "战略合作、标准推进、生态绑定" },
-  { key: "strategy", label: "战略动向", desc: "融资、高管变动、组织调整、战略转型" },
-  { key: "policy", label: "政策法规", desc: "法规、标准、认证、监管" },
-  { key: "talent", label: "人才动态", desc: "招聘、人才流动" },
-  { key: "market", label: "行业动态", desc: "市场分析、媒体解读（兜底分类）" },
-];
+  return (
+    <div className={`rounded-xl border ${border} ${bg} overflow-hidden`}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full p-4 flex items-center gap-3 text-left hover:bg-opacity-80 transition-colors"
+      >
+        <div className={`w-10 h-10 rounded-full bg-white border-2 ${border} flex items-center justify-center flex-shrink-0 text-lg`}>
+          {icon || stage.charAt(0)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-800">{stage}</span>
+            <span className="text-xs text-slate-400">→</span>
+            <span className="text-xs text-slate-600">{purpose}</span>
+          </div>
+          <div className="text-xs text-slate-500 mt-0.5">{summary}</div>
+        </div>
+        <div className="hidden md:flex items-center gap-4 flex-shrink-0">
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-sky-500">📥</span>
+            <span className="text-xs text-slate-600">{input[0]}</span>
+          </div>
+          <div className="text-slate-300">→</div>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-emerald-500">📤</span>
+            <span className="text-xs text-slate-600">{output[0]}</span>
+          </div>
+          <svg className={`w-4 h-4 text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </button>
 
-const EVIDENCE_TYPES = [
-  { key: "all", label: "全部证据" },
-  { key: "official", label: "官方发布" },
-  { key: "product_page", label: "方案产品页" },
-  { key: "case_study", label: "案例页" },
-  { key: "media", label: "媒体报道" },
-  { key: "job", label: "招聘信息" },
-  { key: "document", label: "文档资料" },
-  { key: "full_text", label: "长文本" },
-];
+      {expanded && (
+        <div className="px-4 pb-4 border-t border-slate-200 pt-3">
+          <div className="bg-white/60 rounded-lg p-3 mb-4">
+            <div className="text-xs font-semibold text-slate-500 mb-1">🎯 这个步骤为什么存在？</div>
+            <p className="text-sm text-slate-700">{purpose}</p>
+          </div>
+          <div className="grid md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <div className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1">
+                <span className="text-sky-500">📥</span> 输入
+              </div>
+              <ul className="space-y-1">
+                {input.map((inp, i) => (
+                  <li key={i} className="text-xs text-slate-600 flex items-start gap-1">
+                    <span className="text-sky-400 mt-0.5">•</span> {inp}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1">
+                <span className="text-emerald-500">📤</span> 输出
+              </div>
+              <ul className="space-y-1">
+                {output.map((out, i) => (
+                  <li key={i} className="text-xs text-slate-600 flex items-start gap-1">
+                    <span className="text-emerald-400 mt-0.5">•</span> {out}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <div className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1">
+                <span className="text-violet-500">🔧</span> 工具 / 函数
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {tools.map((tool, i) => (
+                  <span key={i} className="px-2 py-0.5 bg-slate-800 text-slate-100 rounded text-xs font-mono">{tool}</span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1">
+                <span className="text-amber-500">📏</span> 规则
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {rules.map((rule, i) => (
+                  <span key={i} className="px-2 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded text-xs">{rule}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <div className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1">
+              <span className="text-cyan-500">📋</span> 详细步骤
+            </div>
+            <ul className="space-y-1 bg-white rounded-lg p-2">
+              {details.map((detail, i) => (
+                <li key={i} className="text-xs text-slate-600 flex items-start gap-1">
+                  <span className="text-cyan-400 mt-0.5">{i + 1}.</span> {detail}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 mb-4">
+            <div className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1">
+              <span className="text-slate-400">🔬</span> 白盒透明性
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">{whitebox}</p>
+          </div>
+
+          {example && (
+            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg p-3 border border-indigo-200">
+              <div className="text-xs font-semibold text-indigo-700 mb-2 flex items-center gap-1">
+                <span className="text-indigo-400">📎</span> 实际案例
+              </div>
+              {example.before && (
+                <div className="mb-2">
+                  <div className="text-xs text-slate-500 mb-0.5">处理前：</div>
+                  <div className="text-xs text-slate-600 bg-white/60 rounded p-2 font-mono">{example.before}</div>
+                </div>
+              )}
+              {example.after && (
+                <div className="mb-2">
+                  <div className="text-xs text-slate-500 mb-0.5">处理后：</div>
+                  <div className="text-xs text-slate-600 bg-white/60 rounded p-2 font-mono">{example.after}</div>
+                </div>
+              )}
+              {example.note && (
+                <div className="text-xs text-indigo-600 italic">{example.note}</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FullPipelineDiagram() {
+  const stages = [
+    {
+      num: 1,
+      stage: "爬取策略",
+      icon: "🎯",
+      summary: "确定目标公司，用对应解析规则",
+      purpose: "告诉系统去哪找信息、用什么规则解析",
+      input: ["目标公司列表 (12家)"],
+      output: ["匹配到的 Strategy"],
+      tools: ["findStrategyForUrl()"],
+      rules: ["URL 正则匹配 12 家公司"],
+      details: [
+        "Vector / Elektrobit / TTTech Auto / 经纬恒润 / 东软睿驰 / 中科创达 / 华为乾崑 / 芯驰科技 / 黑芝麻智能 / ETAS / AUTOSAR / 盖世汽车",
+        "每家公司有独立的 URL pattern 和 CSS selector",
+        "策略模式：改一家不影响其他",
+      ],
+      whitebox: "爬取策略是策略模式的实现，每家公司独立解析逻辑。页面改版只需改对应 strategy 文件。",
+      example: {
+        before: "系统收到URL: https://autosar.com/news.html",
+        after: "匹配到 AUTOSAR Strategy，得知使用 #news-list > li > a 作为新闻列表选择器",
+        note: "如果某公司改版，只要更新对应的 selector 即可，不影响其他公司",
+      },
+      color: "sky",
+      bg: "bg-sky-50",
+      border: "border-sky-200",
+    },
+    {
+      num: 2,
+      stage: "信息爬取",
+      icon: "🌐",
+      summary: "按规则抓取目标页面 HTML",
+      purpose: "把网页内容下载到本地",
+      input: ["URL", "pages (翻页配置)"],
+      output: ["原始 HTML 字符串"],
+      tools: ["fetch()"],
+      rules: ["遵守 robots.txt", "超时 30s"],
+      details: [
+        "HTTP GET 请求下载页面",
+        "支持多页翻页 (pages: [1,2,3])",
+        "网络错误不影响其他页面",
+      ],
+      whitebox: "遵守 robots.txt 是互联网爬取的基本伦理。错误隔离确保单站失败不影响整体。",
+      example: {
+        before: "URL: https://vector.com/technologies.html, pages: [1,2,3]",
+        after: "下载得到 vector.com 第1-3页的完整 HTML 源码",
+        note: "即使 vector.com 无法访问，autosar.com 仍然可以正常抓取",
+      },
+      color: "sky",
+      bg: "bg-sky-50",
+      border: "border-sky-200",
+    },
+    {
+      num: 3,
+      stage: "HTML解析",
+      icon: "🔍",
+      summary: "从 HTML 中提取新闻标题/摘要/日期",
+      purpose: "把网页结构化，变成数据",
+      input: ["原始 HTML"],
+      output: ["items: { title, summary, date, url }"],
+      tools: ["cheerio.load()"],
+      rules: ["每家公司有独立 CSS selector"],
+      details: [
+        "cheerio = Node.js 端的 jQuery",
+        "根据 selector 定位新闻列表",
+        "提取: 标题 / 摘要 / 日期 / 链接",
+      ],
+      whitebox: "cheerio 让 HTML 解析像操作 DOM 一样简单。每个 selector 是根据目标页面结构手写的。",
+      example: {
+        before: '<li><a href="/news/123">华为发布乾崑ADS 3.0</a><span>2024-01-15</span></li>',
+        after: '{ title: "华为发布乾崑ADS 3.0", date: "2024-01-15", url: "/news/123", summary: "..." }',
+        note: "每个 selector 都是工程师根据目标页面亲手写的，确保精准提取",
+      },
+      color: "cyan",
+      bg: "bg-cyan-50",
+      border: "border-cyan-200",
+    },
+    {
+      num: 4,
+      stage: "信息标准化",
+      icon: "🧹",
+      summary: "清洗脏数据，统一格式",
+      purpose: "去除杂质，保证数据质量",
+      input: ["原始 items (含噪声)"],
+      output: ["干净的 items"],
+      tools: ["parseDate()", "trim()"],
+      rules: ["日期 ISO 8601", "summary ≤ 200字"],
+      details: [
+        "日期统一 YYYY-MM-DD",
+        "去除 HTML 标签/空白",
+        "去除广告/导航占位符",
+      ],
+      whitebox: "ETL 的 Transform 环节。统一格式方便后续处理，长度限制防存储溢出。",
+      example: {
+        before: '{ title: "  华为发布乾崑ADS 3.0  \n\n", date: "January 15, 2024", summary: "华为在昨日的发布会上..." }',
+        after: '{ title: "华为发布乾崑ADS 3.0", date: "2024-01-15", summary: "华为在昨日的发布会上..." }',
+        note: '" 华为 " → "华为"，"January 15, 2024" → "2024-01-15"，统一格式便于后续处理',
+      },
+      color: "teal",
+      bg: "bg-teal-50",
+      border: "border-teal-200",
+    },
+    {
+      num: 5,
+      stage: "LLM分类",
+      icon: "🏷️",
+      summary: "AI 识别新闻属于哪一类",
+      purpose: "打标签，便于后续按类别筛选分析",
+      input: ["items[] (≤ 50条)"],
+      output: ["每条带 category + reason + confidence"],
+      tools: ["DeepSeek API (temp=0.3)"],
+      rules: ["5类: 产品技术/生态合作/战略动向/政策法规/人才动态"],
+      details: [
+        "调用 DeepSeek 分类",
+        "返回: 分类 + 理由 + 置信度",
+        "失败则 fallback 关键词匹配",
+        "所有调用记录到 llm_runs 表",
+      ],
+      whitebox: "黑盒 AI 第一次介入。temperature=0.3 减少随机性。记录完整输入输出供审计追溯。",
+      example: {
+        before: '[{ "title": "华为发布乾崑ADS 3.0", "summary": "华为发布新一代自动驾驶..." }]',
+        after: '[{ "title": "华为发布乾崑ADS 3.0", "category": "产品技术", "reason": "新品发布/技术突破", "confidence": 0.92 }]',
+        note: "AI 判断这是'产品技术'类，理由是'新品发布/技术突破'，置信度 0.92",
+      },
+      color: "violet",
+      bg: "bg-violet-50",
+      border: "border-violet-200",
+    },
+    {
+      num: 6,
+      stage: "命中判断",
+      icon: "✅",
+      summary: "关键词匹配，过滤相关内容",
+      purpose: "只保留与目标相关的信息",
+      input: ["带分类的 items"],
+      output: ["命中的 items + matched_keywords"],
+      tools: ["keyword matching"],
+      rules: ["命中则标记关键词"],
+      details: [
+        "遍历关键词列表",
+        "标题/summary 包含则命中",
+        "记录命中的关键词",
+      ],
+      whitebox: "第一层过滤。只有真正与目标相关的条目才进入后续分析。",
+      example: {
+        before: '[{ "title": "某手机厂商发布新款手机", "category": "产品技术" }]',
+        after: "未命中（无目标关键词），跳过",
+        note: "虽然这条是'产品技术'类，但跟我们的目标公司/技术方向无关，所以不进入后续分析",
+      },
+      color: "purple",
+      bg: "bg-purple-50",
+      border: "border-purple-200",
+    },
+    {
+      num: 7,
+      stage: "降噪过滤",
+      icon: "🗑️",
+      summary: "去掉导航/广告/低质量条目",
+      purpose: "确保数据库存的都是真新闻",
+      input: ["可能含噪声的 items"],
+      output: ["高质量 items"],
+      tools: ["isLowQualityTitle()"],
+      rules: ["标题 ≥ 5字符", "去除 policy/menu/导航等"],
+      details: [
+        "过滤短标题 (< 5字)",
+        "过滤 'read more' 等占位符",
+        "去重标题",
+      ],
+      whitebox: "网页充满干扰内容，降噪确保数据纯净。",
+      example: {
+        before: "['Read more', '产品技术', '联系我们', '华为发布乾崑ADS 3.0', '华为发布乾崑ADS 3.0']",
+        after: "['华为发布乾崑ADS 3.0']",
+        note: "Read more 太短被过滤，产品技术是导航被过滤，重复的标题被去重",
+      },
+      color: "fuchsia",
+      bg: "bg-fuchsia-50",
+      border: "border-fuchsia-200",
+    },
+    {
+      num: 8,
+      stage: "数据存储",
+      icon: "💾",
+      summary: "持久化到 SQLite，支持追溯",
+      purpose: "记录每一步操作，随时可查",
+      input: ["processed items", "LLM 元数据"],
+      output: ["sources / documents / llm_runs 三表"],
+      tools: ["SQLite INSERT/UPDATE"],
+      rules: ["sources: url 唯一", "llm_runs: 记录完整 prompt/response"],
+      details: [
+        "sources: URL → 公司映射",
+        "documents: 解析后的内容",
+        "llm_runs: AI 调用的完整记录",
+      ],
+      whitebox: "三表设计实现完整审计链: URL可查原文、AI输入输出可查、结论可溯源。",
+      example: {
+        before: "一条干净的新闻: { title: '华为发布乾崑ADS 3.0', url: 'https://...', company: '华为乾崑' }",
+        after: "sources表: url→华为乾崑 | documents表: 标题/摘要/日期 | llm_runs表: AI调用记录",
+        note: "未来可以追溯：这条新闻从哪个URL来的？是哪个AI调用处理的？用了什么prompt？",
+      },
+      color: "indigo",
+      bg: "bg-indigo-50",
+      border: "border-indigo-200",
+    },
+    {
+      num: 9,
+      stage: "洞察聚合",
+      icon: "🔗",
+      summary: "AI 关联多文档，生成结构化结论",
+      purpose: "把散乱新闻变成可行动的洞察",
+      input: ["时间窗口内所有 items"],
+      output: ["{ top_changes, company_insights, management_actions }"],
+      tools: ["DeepSeek API", "generateBrief()"],
+      rules: ["≤ 5条结论", "不编造", "边界说明"],
+      details: [
+        "时间窗口: 7/30/90天",
+        "可按公司筛选或全公司",
+        "AI 聚合生成结构化 JSON",
+        "四大约束防过度推断",
+      ],
+      whitebox: "黑盒 AI 第二次介入。核心约束: 不编造 + 说边界 + 落到部门 + 不套话。",
+      example: {
+        before: "[17条新闻: 华为发布ADS3.0 | 黑芝麻发布芯片... | 经纬恒润合作... ]",
+        after: '{ "top_changes": ["自动驾驶进入量产阶段", "芯片国产化加速"], "company_insights": [{ "company": "华为", "insight": "乾崑品牌独立运营" }], "management_actions": [{ "dept": "产品部", "action": "评估华为乾崑合作可能" }] }',
+        note: "AI 把17条散乱的新闻聚合成3条有价值的洞察，每条都可回溯到原始新闻",
+      },
+      color: "blue",
+      bg: "bg-blue-50",
+      border: "border-blue-200",
+    },
+    {
+      num: 10,
+      stage: "报告生成",
+      icon: "📝",
+      summary: "JSON 转 Markdown，可读可分享",
+      purpose: "让管理层快速抓住重点",
+      input: ["brief JSON"],
+      output: ["Markdown 报告"],
+      tools: ["buildMarkdown()"],
+      rules: ["brief: 3条 / exec: 5条"],
+      details: [
+        "brief: 高管版 (简洁抓重点)",
+        "exec: 业务版 (详细可执行)",
+        "包含: 执行摘要/重点变化/对普华影响/管理动作",
+      ],
+      whitebox: "两种版本满足不同受众。Markdown 便于传播和存档。",
+      example: {
+        before: '{ "top_changes": ["自动驾驶量产"], "management_actions": [{ "dept": "产品部", "action": "评估" }] }',
+        after: "## 执行摘要\n自动驾驶进入量产阶段，建议优先评估...\n\n## 重点变化\n1. 多家公司发布量产方案\n\n## 对普华影响\n...\n\n## 管理动作\n产品部：评估华为乾崑合作可能性",
+        note: "同一个JSON，brief版只显示3条最关键的，exec版显示5条带详细分析",
+      },
+      color: "amber",
+      bg: "bg-amber-50",
+      border: "border-amber-200",
+    },
+    {
+      num: 11,
+      stage: "置信率计算",
+      icon: "📊",
+      summary: "基于Embedding语义匹配计算置信度",
+      purpose: "告诉用户这条结论有多可靠，可验证",
+      input: ["top_change 文本", "所有新闻条目"],
+      output: ["final_confidence (30-95%)"],
+      tools: ["SiliconFlow Embedding (BAAI/bge-large-zh-v1.5)", "余弦相似度", "URL去重", "日期计算"],
+      rules: ["Base 0.30 + 证据0.10/条 + 跨公司+0.15 + 跨媒体+0.15 + 时效(7天+0.10, 30天+0.05)", "相似度阈值 0.55"],
+      details: [
+        "Base: 0.30 (最低起点)",
+        "Embedding相似度阈值: 0.55 (只有 ≥0.55 才算相关)",
+        "证据得分: 每条相似URL +0.10，上限 0.40",
+        "多样性-公司: 跨2+目标公司 +0.15",
+        "多样性-媒体: 跨2+媒体域名 +0.15",
+        "时效: 7天内 +0.10，30天内 +0.05",
+        "上限: 0.95 (永远留5%不确定性)",
+      ],
+      whitebox: "置信率使用向量模型做语义匹配，而非简单的关键词匹配。只有当新闻内容与洞察结论的语义相似度 ≥0.55 时，才计入证据。API不可用时回退到关键词匹配。",
+      example: {
+        before: "洞察: '华为乾崑发布896线激光雷达'\n匹配: 华为官网1篇 + 盖世汽车2篇（共3条URL）\n来源: 华为、盖世汽车（2家公司，2个媒体）\n时效: 最新1天前",
+        after: "置信率 = 0.30 + 0.30(证据3条) + 0.15(跨公司) + 0.15(跨媒体) + 0.10(7天内) = 1.00 → 上限0.95\n\n🟢 高置信率 (95%)",
+        note: "3条独立来源新闻，语义相似度均≥0.55，跨2家公司和2个媒体，3天内发布，互相印证，置信度很高",
+      },
+      color: "orange",
+      bg: "bg-orange-50",
+      border: "border-orange-200",
+    },
+    {
+      num: 12,
+      stage: "内容输出",
+      icon: "📤",
+      summary: "渲染报告 + 附原文链接 + 置信率标注",
+      purpose: "让用户看得信，看得懂，能核实",
+      input: ["Markdown", "citations", "confidence"],
+      output: ["可读的 HTML 页面"],
+      tools: ["Markdown renderer"],
+      rules: ["每条结论附原文链接", "置信率 badge"],
+      details: [
+        "Markdown 渲染",
+        "点击查看原文核实",
+        "置信率: 高(绿)/中(黄)/低(红)",
+      ],
+      whitebox: "从'信任 AI'到'验证 AI'。每条结论可回溯原始文档。",
+      example: {
+        before: "洞察: '华为乾崑与多家公司合作' 置信率: 0.98",
+        after: "🟢 高 (0.98) 华为乾崑与多家公司建立战略合作  [查看原文1] [查看原文2] [查看原文3]",
+        note: "用户点击可以直接跳转到原始新闻页面核实，不需要信任AI",
+      },
+      color: "emerald",
+      bg: "bg-emerald-50",
+      border: "border-emerald-200",
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 p-6">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-2xl">🎯</span>
+          <h3 className="text-lg font-bold text-emerald-800">您将得到一份能改变业务策略的洞察报告</h3>
+        </div>
+        <div className="bg-white/60 rounded-xl p-4 space-y-3">
+          <p className="text-sm text-slate-700">
+            系统自动追踪 <span className="font-semibold text-emerald-700">12 家目标公司</span>的公开新闻，
+            AI 聚合分析生成<span className="font-semibold text-emerald-700">结构化洞察结论</span>——
+            每条结论附带置信率和原文链接，您可以验证后再做决策。
+          </p>
+          <div className="flex items-center gap-2 text-slate-400 justify-center">↓</div>
+          <div className="bg-emerald-100 rounded-lg p-3 text-center">
+            <p className="text-sm font-semibold text-emerald-800">最终您得到的是：</p>
+            <p className="text-sm text-emerald-700 mt-1">
+              一份知道什么该信、什么要核实的商业洞察报告，帮您做出更有依据的战略决策
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-gradient-to-r from-violet-50 to-purple-50 rounded-2xl border border-violet-200 p-6">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-2xl">📖</span>
+          <h3 className="text-lg font-bold text-violet-800">一个具体的例子：新闻怎么变成洞察？</h3>
+        </div>
+        <div className="bg-white/60 rounded-xl p-4 space-y-4">
+          <div className="border-l-4 border-sky-400 pl-4 py-2 bg-sky-50 rounded-r-lg">
+            <div className="text-xs font-semibold text-sky-600 mb-1">Step 1-4 原始新闻（3月4日）</div>
+            <p className="text-sm text-slate-700">华为乾崑官网出现一条新闻：<span className="font-semibold">"华为乾崑发布新一代双光路图像级激光雷达，896线全球量产最高规格"</span></p>
+            <p className="text-xs text-slate-500 mt-1">发布时间：2026-03-04 | 来源：auto.huawei.com</p>
+          </div>
+          
+          <div className="text-center text-slate-400">↓</div>
+          
+          <div className="border-l-4 border-violet-400 pl-4 py-2 bg-violet-50 rounded-r-lg">
+            <div className="text-xs font-semibold text-violet-600 mb-1">Step 5 LLM分类</div>
+            <p className="text-sm text-slate-700">AI 判断：这是一条 <span className="font-semibold text-violet-600">产品技术</span> 类新闻</p>
+            <p className="text-xs text-slate-500 mt-1">理由：新品发布/技术突破 | 进入分析库待聚合</p>
+          </div>
+          
+          <div className="text-center text-slate-400">↓</div>
+          
+          <div className="border-l-4 border-purple-400 pl-4 py-2 bg-purple-50 rounded-r-lg">
+            <div className="text-xs font-semibold text-purple-600 mb-1">Step 6-8 命中判断 & 降噪 & 存储</div>
+            <p className="text-sm text-slate-700">命中关键词"华为"、"激光雷达"、"自动驾驶" → 进入分析库</p>
+            <p className="text-xs text-slate-500 mt-1">同时发现 RoboSense速腾聚创 也发布了新款激光雷达并实现盈利</p>
+          </div>
+          
+          <div className="text-center text-slate-400">↓</div>
+          
+          <div className="border-l-4 border-blue-400 pl-4 py-2 bg-blue-50 rounded-r-lg">
+            <div className="text-xs font-semibold text-blue-600 mb-1">Step 9 洞察聚合（AI分析）</div>
+            <p className="text-sm text-slate-700">基于3家公司（华为、RoboSense速腾聚创、小马智行）的报道，AI 聚合成：</p>
+            <p className="text-sm text-blue-700 font-medium mt-1">"激光雷达进入'图像级'感知时代，国产厂商技术迭代加速"</p>
+          </div>
+          
+          <div className="text-center text-slate-400">↓</div>
+          
+          <div className="border-l-4 border-orange-400 pl-4 py-2 bg-orange-50 rounded-r-lg">
+            <div className="text-xs font-semibold text-orange-600 mb-1">Step 11 置信率计算（Embedding语义匹配）</div>
+            
+            <div className="bg-slate-800 rounded-lg p-3 mt-2 font-mono text-xs text-slate-100">
+              <div className="text-amber-400 mb-2">置信率 = 0.30 + 0.30 + 0.15 + 0.15 + 0.10 = 1.00 → 0.95</div>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              <div className="bg-emerald-50 rounded-lg p-2 border border-emerald-200">
+                <p className="text-xs font-semibold text-emerald-700 mb-1">① Base = 0.30（最低起点）</p>
+                <p className="text-xs text-slate-600">即使没有任何证据匹配，也有30%的基本置信度</p>
+              </div>
+
+              <div className="bg-sky-50 rounded-lg p-2 border border-sky-200">
+                <p className="text-xs font-semibold text-sky-700 mb-1">② 证据得分 = +0.30（3条独立URL，语义相似度≥0.55）</p>
+                <p className="text-xs text-slate-600 mb-1">计算过程：Embedding向量化 → 计算余弦相似度 → 过滤阈值≥0.55 → URL去重</p>
+                <div className="bg-white rounded p-1.5 mt-1 space-y-0.5">
+                  <p className="text-xs text-slate-500">使用 SiliconFlow BAAI/bge-large-zh-v1.5 模型生成1024维向量</p>
+                  <p className="text-xs text-slate-500">匹配到3条独立URL新闻（相似度均≥0.55）：</p>
+                  <p className="text-xs text-slate-400 ml-2">1. auto.huawei.com/... 相似度0.72（华为官网）</p>
+                  <p className="text-xs text-slate-400 ml-2">2. gasgoo.com/...203734... 相似度0.68（RoboSense速腾聚创Q4盈利）</p>
+                  <p className="text-xs text-slate-400 ml-2">3. gasgoo.com/... 相似度0.61（小马智行Robotaxi）</p>
+                  <p className="text-xs text-slate-500 mt-1">证据得分 = min(0.40, 3×0.10) = 0.30</p>
+                </div>
+              </div>
+
+              <div className="bg-violet-50 rounded-lg p-2 border border-violet-200">
+                <p className="text-xs font-semibold text-violet-700 mb-1">③ 多样性-公司 = +0.15（跨2+公司）</p>
+                <div className="bg-white rounded p-1.5 mt-1">
+                  <p className="text-xs text-slate-500">独立公司数：华为 + 速腾 + 小马智行 = 3家</p>
+                  <p className="text-xs text-slate-500 mt-1">3家 ≥ 2家 → +0.15</p>
+                </div>
+              </div>
+
+              <div className="bg-orange-50 rounded-lg p-2 border border-orange-200">
+                <p className="text-xs font-semibold text-orange-700 mb-1">④ 多样性-媒体 = +0.15（跨2+媒体域名）</p>
+                <div className="bg-white rounded p-1.5 mt-1">
+                  <p className="text-xs text-slate-500">独立媒体域名：auto.huawei.com + gasgoo.com = 2个</p>
+                  <p className="text-xs text-slate-500 mt-1">2个 ≥ 2个 → +0.15</p>
+                </div>
+              </div>
+
+              <div className="bg-pink-50 rounded-lg p-2 border border-pink-200">
+                <p className="text-xs font-semibold text-pink-700 mb-1">⑤ 时效得分 = +0.10（7天内）</p>
+                <div className="bg-white rounded p-1.5 mt-1">
+                  <p className="text-xs text-slate-500">最新新闻日期：2026-03-04（距今约3天）</p>
+                  <p className="text-xs text-slate-500 mt-1">3天 ≤ 7天 → +0.10</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-100 rounded-lg p-2 mt-3">
+              <p className="text-xs font-semibold text-slate-700">计算结果：</p>
+              <p className="text-xs text-slate-600 mt-1">0.30(Base) + 0.30(证据3条) + 0.15(跨公司) + 0.15(跨媒体) + 0.10(时效) = <span className="font-bold text-emerald-600">1.00 → 0.95</span></p>
+              <p className="text-xs text-slate-500 mt-1">置信等级：🟢 高 (95%) — 可直接用于决策参考</p>
+            </div>
+
+            <div className="bg-cyan-50 rounded-lg p-2 mt-3 border border-cyan-200">
+              <p className="text-xs font-semibold text-cyan-700 mb-1">🔬 为什么用Embedding而不是关键词？</p>
+              <p className="text-xs text-slate-600">关键词匹配会错误地把"华为发布手机"当成"华为汽车"的相关证据。Embedding通过语义向量判断内容是否真正讨论相同主题，只有相似度≥0.55的才计入证据。</p>
+            </div>
+          </div>
+          
+          <div className="text-center text-slate-400">↓</div>
+          
+          <div className="border-l-4 border-emerald-400 pl-4 py-2 bg-emerald-50 rounded-r-lg">
+            <div className="text-xs font-semibold text-emerald-600 mb-1">Step 12 最终呈现</div>
+            <div className="bg-white rounded-lg p-3 border border-emerald-200 mt-2">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium">置信率: 95%</span>
+                <span className="text-xs text-slate-500">🟢 高置信</span>
+              </div>
+              <p className="text-sm text-slate-800">激光雷达进入"图像级"感知时代，国产厂商技术迭代加速</p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <a href="https://auto.huawei.com/cn/news/2026/2026-3-4-lidar" target="_blank" className="text-xs text-sky-600 hover:text-sky-800 bg-sky-50 px-2 py-1 rounded">华为乾崑激光雷达 2026-03-04 ↗</a>
+                <a href="https://autodata.gasgoo.com/information/imView/articleDetails/2037340329185660928" target="_blank" className="text-xs text-sky-600 hover:text-sky-800 bg-sky-50 px-2 py-1 rounded">RoboSense速腾聚创Q4盈利 2026-03-26 ↗</a>
+                <a href="https://autodata.gasgoo.com/information/imView/articleDetails/20" target="_blank" className="text-xs text-sky-600 hover:text-sky-800 bg-sky-50 px-2 py-1 rounded">小马智行Robotaxi 2026-03-27 ↗</a>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 mt-2">点击任意链接可直接查看原始新闻，您可自行核实这条结论是否准确</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-2xl border border-slate-300 p-6">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-2xl">🔬</span>
+          <h3 className="text-lg font-bold text-slate-800">报告的科学性与客观性</h3>
+        </div>
+        <div className="bg-white/60 rounded-xl p-4 mb-4">
+          <p className="text-sm text-slate-700 leading-relaxed mb-3">
+            当别人问"凭什么这么说？"——系统用以下机制保证报告经得起质疑：
+          </p>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">📰</span>
+                <span className="font-semibold text-blue-800 text-sm">数据来源客观</span>
+              </div>
+              <p className="text-xs text-blue-700">全部来自目标公司公开新闻，非主观臆测，无利益相关性</p>
+            </div>
+            <div className="bg-violet-50 rounded-lg p-3 border border-violet-200">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">🔗</span>
+                <span className="font-semibold text-violet-800 text-sm">结论可回溯</span>
+              </div>
+              <p className="text-xs text-violet-700">每条洞察点击即可查看原始出处，您可独立核实，无需信任 AI</p>
+            </div>
+            <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-200">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">⚖️</span>
+                <span className="font-semibold text-emerald-800 text-sm">置信率可审计</span>
+              </div>
+              <p className="text-xs text-emerald-700">置信率由Embedding语义匹配+公式计算：相似度阈值0.55，证据数量×多样性×时效性，公式公开透明，可人工验算</p>
+            </div>
+            <div className="bg-amber-50 rounded-lg p-3 border border-amber-200">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">🚫</span>
+                <span className="font-semibold text-amber-800 text-sm">AI 有约束</span>
+              </div>
+              <p className="text-xs text-amber-700">AI 不能随意发挥：不许编造、不许说套话、证据不足必须说明边界</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-slate-100 rounded-lg p-3 text-center">
+          <p className="text-sm text-slate-700">
+            <span className="font-semibold">一句话说明：</span>
+            您不是在信任 AI，您是在信任<span className="text-emerald-700 font-semibold">可验证的公开数据</span>、<span className="text-emerald-700 font-semibold">Embedding向量语义匹配</span>和<span className="text-emerald-700 font-semibold">透明的计算公式</span>
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-200 p-6">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-2xl">📊</span>
+          <h3 className="text-lg font-bold text-amber-800">为什么置信率让报告值得信赖？</h3>
+        </div>
+
+        <div className="bg-white/70 rounded-xl p-4 mb-5">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-amber-100 border border-amber-200 flex items-center justify-center flex-shrink-0 text-amber-600 font-bold text-sm">?</div>
+            <div>
+              <p className="text-sm font-semibold text-slate-700 mb-1">为什么要看置信率？</p>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                AI 分析新闻后会说"X 公司正在大力推广 Y 技术"——但这到底是多条报道交叉验证的事实，还是单条消息的过度推断？
+                置信率把"证据质量"量化出来，让结论不再是模糊的"我觉得靠谱"。
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-800 rounded-xl p-4 mb-5 font-mono">
+          <div className="text-xs text-slate-400 mb-2">科学置信率公式（基于Embedding语义匹配）</div>
+          <div className="text-sm text-slate-100">
+            <span className="text-amber-400">置信率</span>
+            <span className="text-slate-500 mx-2">=</span>
+            <span className="text-emerald-400">0.30</span>
+            <span className="text-slate-500"> + </span>
+            <span className="text-sky-400">证据得分</span>
+            <span className="text-slate-500"> + </span>
+            <span className="text-violet-400">多样性得分</span>
+            <span className="text-slate-500"> + </span>
+            <span className="text-orange-400">时效得分</span>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-700 grid md:grid-cols-4 gap-3 text-xs">
+            <div><span className="text-emerald-400">Base</span><br/><span className="text-slate-400">0.30 最低起点</span></div>
+            <div><span className="text-sky-400">证据得分</span><br/><span className="text-slate-400">+0.10/条（相似度≥0.55），上限0.40</span></div>
+            <div><span className="text-violet-400">多样性得分</span><br/><span className="text-slate-400">跨2+公司+0.15 / 跨2+媒体+0.15</span></div>
+            <div><span className="text-orange-400">时效得分</span><br/><span className="text-slate-400">7天内+0.10 / 30天内+0.05</span></div>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-700">
+            <div className="text-xs text-cyan-400 mb-1">向量模型: SiliconFlow BAAI/bge-large-zh-v1.5 (1024维)</div>
+            <div className="text-xs text-slate-400">API不可用时回退到关键词匹配</div>
+          </div>
+        </div>
+
+        <div className="bg-cyan-50 border border-cyan-200 rounded-xl p-4 mb-5">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-cyan-100 border border-cyan-200 flex items-center justify-center flex-shrink-0 text-cyan-600 font-bold text-sm">💡</div>
+            <div>
+              <p className="text-sm font-semibold text-cyan-800 mb-1">为什么需要 0.55 相似度阈值？</p>
+              <p className="text-xs text-cyan-700 leading-relaxed">
+                置信率的核心逻辑是：只有当<span className="font-semibold">新闻内容与洞察结论讨论的是同一个话题</span>时，才算作有效证据。
+                相似度 ≥0.55 意味着新闻和洞察在语义空间中是"相关的"，而不是简单地包含相同关键词。
+                例如，"华为发布手机"和"华为汽车"都包含"华为"这个词，但向量模型能判断它们讨论的是完全不同的话题，不会错误地计为证据。
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-3 gap-4 mb-5">
+          <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-2xl">🟢</span>
+              <span className="font-bold text-emerald-800">高 ≥ 60%</span>
+            </div>
+            <p className="text-sm text-emerald-700 mb-2">结论有较多证据支撑，值得关注</p>
+            <div className="bg-white/60 rounded-lg p-2 space-y-1">
+              <p className="text-xs text-slate-600">2+独立来源或跨公司/媒体佐证</p>
+              <p className="text-xs text-slate-600 mt-1">可直接用于汇报、决策、重点工作推进</p>
+            </div>
+          </div>
+          <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-2xl">🟡</span>
+              <span className="font-bold text-amber-800">中 50-60%</span>
+            </div>
+            <p className="text-sm text-amber-700 mb-2">有初步依据，建议核实</p>
+            <div className="bg-white/60 rounded-lg p-2 space-y-1">
+              <p className="text-xs text-slate-600">单一来源或时间较旧</p>
+              <p className="text-xs text-slate-600 mt-1">适合初步判断、列入关注清单、后续跟踪</p>
+            </div>
+          </div>
+          <div className="bg-rose-50 rounded-xl p-4 border border-rose-200">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-2xl">🔴</span>
+              <span className="font-bold text-rose-800">低 &lt; 50%</span>
+            </div>
+            <p className="text-sm text-rose-700 mb-2">证据不足，需谨慎</p>
+            <div className="bg-white/60 rounded-lg p-2 space-y-1">
+              <p className="text-xs text-slate-600">仅单条弱证据，需补充更多来源</p>
+              <p className="text-xs text-slate-600 mt-1">仅作线索参考，不可作为决策依据</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white/60 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center flex-shrink-0 text-emerald-600">✓</div>
+            <div>
+              <p className="text-sm font-semibold text-slate-700 mb-1">报告的核心价值</p>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                自动追踪 12 家目标公司的公开新闻，AI 聚合分析 → 生成结构化洞察 → 每条结论可回溯原始出处。
+                置信率让"AI 说的"变成"有证据支撑的"，您不是在信任 AI，您是在信任证据。
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xl">🔄</span>
+          <h3 className="font-semibold text-slate-800">全流程详解</h3>
+          <span className="text-xs text-slate-400">(点击展开查看每步详情)</span>
+        </div>
+        <div className="space-y-2">
+          {stages.map((s) => (
+            <PipelineStage key={s.num} {...s} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReasoningTrace({ trace }: { trace: LLMTrace }) {
+  let parsedOutput: any = { confidence: null, summary: "", category: "" };
+  try {
+    parsedOutput = JSON.parse(trace.raw_response || "{}");
+  } catch {}
+
+  return (
+    <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
+      <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-3 flex-wrap">
+        <span className="px-2 py-0.5 rounded bg-violet-100 text-violet-700 text-xs font-mono">
+          {trace.prompt_version || "deepseek-v1"}
+        </span>
+        <span className="text-xs text-slate-500">{trace.item_count} 条输入证据</span>
+        <span className="text-xs text-slate-400">{new Date(trace.created_at).toLocaleString("zh-CN")}</span>
+        <span className={`px-2 py-0.5 rounded text-xs ${trace.status === "success" ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+          {trace.status === "success" ? "成功" : "失败"}
+        </span>
+        <ConfidenceBadge confidence={trace.llm_confidence} />
+      </div>
+
+      <div className="p-4 space-y-4">
+        <div className="flex gap-4">
+          <div className="w-12 text-center flex-shrink-0">
+            <div className="w-8 h-8 rounded-full bg-sky-100 border-2 border-sky-300 flex items-center justify-center mx-auto">
+              <span className="text-xs">📥</span>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-slate-700">输入证据</span>
+              <span className="text-xs text-slate-400">{trace.item_count} 条</span>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 max-h-32 overflow-y-auto">
+              {trace.input_preview.length > 0 ? (
+                <div className="space-y-2">
+                  {trace.input_preview.map((item: any, idx: number) => (
+                    <div key={idx} className="text-xs">
+                      <span className="font-medium text-slate-700">[{item.category || '未分类'}]</span>
+                      <span className="text-slate-600 ml-1">{item.summary || item.title || JSON.stringify(item).slice(0, 80)}</span>
+                    </div>
+                  ))}
+                  {trace.item_count > 2 && (
+                    <div className="text-xs text-slate-400">...还有 {trace.item_count - 2} 条</div>
+                  )}
+                </div>
+              ) : (
+                <span className="text-xs text-slate-400">无输入数据</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-4">
+          <div className="w-12 text-center flex-shrink-0">
+            <div className="w-8 h-8 rounded-full bg-violet-100 border-2 border-violet-300 flex items-center justify-center mx-auto">
+              <span className="text-xs">🤖</span>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-slate-700">LLM 推理输出</span>
+              <span className="text-xs text-slate-400">JSON</span>
+            </div>
+            <div className="bg-slate-900 text-slate-100 rounded-lg p-2 max-h-40 overflow-y-auto font-mono text-xs">
+              <div className="text-emerald-400">confidence: {trace.llm_confidence ?? parsedOutput.confidence ?? "null"}</div>
+              <div className="text-blue-400">category: {trace.insight_category || parsedOutput.category || "null"}</div>
+              <div className="text-slate-300 mt-1 text-xs">
+                {JSON.stringify(parsedOutput).slice(0, 200)}...
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-4">
+          <div className="w-12 text-center flex-shrink-0">
+            <div className="w-8 h-8 rounded-full bg-emerald-100 border-2 border-emerald-300 flex items-center justify-center mx-auto">
+              <span className="text-xs">📄</span>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-slate-700">源文档</span>
+              <span className="text-xs text-slate-400">可点击验证</span>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-slate-700 truncate">{trace.doc_title || "无标题"}</p>
+                  <p className="text-xs text-slate-400">{trace.company_id}</p>
+                </div>
+                {trace.doc_url && (
+                  <a href={trace.doc_url} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-sky-600 hover:text-sky-800 flex-shrink-0 px-2 py-1 bg-sky-50 rounded">
+                    查看原文 →
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-4">
+          <div className="w-12 text-center flex-shrink-0">
+            <div className="w-8 h-8 rounded-full bg-amber-100 border-2 border-amber-300 flex items-center justify-center mx-auto">
+              <span className="text-xs">💡</span>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-semibold text-slate-700">洞察结论</span>
+              <ConfidenceBadge confidence={trace.insight_confidence} />
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              {trace.insight_summary ? (
+                <p className="text-sm text-slate-700">{trace.insight_summary}</p>
+              ) : (
+                <p className="text-xs text-slate-400">暂无洞察结论</p>
+              )}
+              <div className="mt-2 pt-2 border-t border-amber-200 flex items-center gap-2">
+                <span className="text-xs text-amber-700">分类：{trace.insight_category || "未知"}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PromptConstraints() {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl bg-white border border-slate-200 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xl">🏷️</span>
+          <h3 className="font-semibold text-slate-800">Stage 1: 分类 Prompt</h3>
+          <span className="text-xs bg-sky-100 text-sky-600 px-2 py-0.5 rounded">lib/crawl/llmClassifier.ts</span>
+        </div>
+        <div className="bg-slate-900 text-slate-100 p-4 rounded-lg font-mono text-xs overflow-x-auto">
+          <pre className="whitespace-pre-wrap">{`你是一个专业的汽车行业商业新闻分类助手，分类要准确并给出简短理由。
+
+分类标准（必须严格选择其一）：
+- 产品技术：新品发布、技术突破、研发进展
+- 生态合作：战略合作、标准推进、生态绑定
+- 战略动向：融资、高管变动、上市
+- 政策法规：政府政策、行业标准
+- 人才动态：招聘需求
+
+返回JSON格式：
+{"items":[{"id":"1","category":"分类名称","reason":"理由"},{"id":"2",...}]}`}</pre>
+        </div>
+        <div className="mt-3 p-3 bg-slate-50 rounded-lg">
+          <div className="text-xs text-slate-600">
+            <span className="font-semibold">约束：</span>必须给出分类理由，避免模糊分类
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-white border border-slate-200 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xl">🤖</span>
+          <h3 className="font-semibold text-slate-800">Stage 2: 聚合 Prompt</h3>
+          <span className="text-xs bg-violet-100 text-violet-600 px-2 py-0.5 rounded">pages/api/insights/generate-brief.ts</span>
+        </div>
+        <div className="bg-slate-900 text-slate-100 p-4 rounded-lg font-mono text-xs overflow-x-auto max-h-48">
+          <pre className="whitespace-pre-wrap">{`【核心原则】
+1. 只基于输入证据，不编造
+2. 不说空话套话，如"行业持续发展、竞争日趋激烈"
+3. 如果证据不足或样本集中，要明确说明结论的边界
+
+【结论边界要求】
+- 单条证据要说"样本有限，单条证据仅供参考"
+- 行业分布集中须说明"主要由某公司驱动"
+- 结论措辞适度：多用"建议优先评估"，不用"必须/立即"
+
+【输出JSON结构】
+{ "top_changes": [...], "company_insights": [...], "management_actions": [...] }`}</pre>
+        </div>
+        <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+          <div className="text-xs text-amber-800">
+            <span className="font-semibold">四大约束：</span>
+            不逐条复述 | 不说空话套话 | 落到具体部门 | 说明结论边界
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function OverviewPage() {
+  const [llmTraces, setLlmTraces] = useState<LLMTrace[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchLLMTraces();
+  }, []);
+
+  async function fetchLLMTraces() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/db/llm-trace?limit=5");
+      if (res.ok) {
+        const data = await res.json();
+        setLlmTraces(data.rows || []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch LLM traces", e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <>
       <Head>
@@ -109,8 +1057,8 @@ export default function OverviewPage() {
           <div className="mx-auto max-w-6xl">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-ink">商业洞察系统总览</h1>
-                <p className="text-sm text-slate-500 mt-1">工作流程、爬虫策略与洞察生成方法</p>
+                <h1 className="text-2xl font-bold text-slate-800">商业洞察系统总览</h1>
+                <p className="text-sm text-slate-500 mt-1">透明 · 可追溯 · 科学</p>
               </div>
               <a href="/" className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -122,1079 +1070,59 @@ export default function OverviewPage() {
           </div>
         </header>
 
-        <div className="mx-auto max-w-6xl px-6 py-8 space-y-10">
+        <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
 
-          {/* 一句话说明 */}
+          <FullPipelineDiagram />
+
           <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">系统定位</h2>
-            <div className="rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 p-6">
-              <p className="text-lg leading-relaxed text-slate-700">
-                <span className="font-semibold text-emerald-700">商业洞察系统</span> 自动抓取目标公司的公开网页，
-                用 AI 分析内容并提取关键信息，最终生成
-                <span className="font-semibold text-emerald-700"> 可行动的洞察结论</span>，
-                帮助您快速了解竞争对手动态、市场趋势和商业机会。
-              </p>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🔍</span>
+                <h3 className="font-semibold text-slate-800">推理过程示例</h3>
+              </div>
+              <button onClick={fetchLLMTraces} disabled={loading}
+                className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded disabled:opacity-50">
+                {loading ? "加载中..." : "刷新"}
+              </button>
             </div>
-          </section>
 
-          {/* 数据流转图 */}
-          <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">数据流转</h2>
-            <div className="rounded-2xl bg-white border border-slate-200 p-6 overflow-x-auto">
-              <div className="flex items-center gap-2 min-w-max">
-                <div className="px-4 py-3 rounded-xl bg-sky-100 border border-sky-300 text-sm font-medium text-sky-700">
-                  🌐 网页
-                </div>
-                <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-                <div className="px-4 py-3 rounded-xl bg-emerald-100 border border-emerald-300 text-sm font-medium text-emerald-700">
-                  🕷️ 策略爬取
-                </div>
-                <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-                <div className="px-4 py-3 rounded-xl bg-amber-100 border border-amber-300 text-sm font-medium text-amber-700">
-                  🧹 质量过滤
-                </div>
-                <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-                <div className="px-4 py-3 rounded-xl bg-violet-100 border border-violet-300 text-sm font-medium text-violet-700">
-                  🤖 LLM分析
-                </div>
-                <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-                <div className="px-4 py-3 rounded-xl bg-rose-100 border border-rose-300 text-sm font-medium text-rose-700">
-                  💡 洞察输出
-                </div>
+            {llmTraces.length === 0 ? (
+              <div className="rounded-2xl bg-white border border-slate-200 p-12 text-center">
+                <div className="text-4xl mb-3">📭</div>
+                <p className="text-slate-600 mb-1">暂无 LLM 调用记录</p>
+                <p className="text-xs text-slate-400">请先执行一次抓取和洞察生成</p>
               </div>
-            </div>
-          </section>
-
-          {/* 目标公司 */}
-          <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">跟踪目标公司（{COMPANIES.length}家）</h2>
-            <div className="rounded-2xl bg-white border border-slate-200 p-6">
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {COMPANIES.map((company) => (
-                  <div key={company.id} className="flex items-center gap-3 p-3 rounded-lg bg-slate-50 border border-slate-100">
-                    <span className="text-lg">🏢</span>
-                    <div>
-                      <p className="text-sm font-medium text-ink">{company.name}</p>
-                      <p className="text-xs text-slate-400">{company.url}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* 爬虫策略 */}
-          <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">爬虫策略（{CRAWL_STRATEGIES.length}个）</h2>
-            <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 border-b border-slate-200">
-                    <tr>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">策略名</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">公司</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">URL模式</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">技术</th>
-                      <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">备注</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {CRAWL_STRATEGIES.map((strategy) => (
-                      <tr key={strategy.name} className="hover:bg-slate-50">
-                        <td className="px-4 py-3 font-mono text-xs text-violet-600">{strategy.name}</td>
-                        <td className="px-4 py-3 text-sm text-ink">{strategy.company}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-500 max-w-xs truncate">{strategy.url}</td>
-                        <td className="px-4 py-3 text-xs text-slate-600">
-                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600">{strategy.tech}</span>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-slate-400">{strategy.note}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="px-4 py-3 bg-slate-50 border-t border-slate-200">
-                <p className="text-xs text-slate-500">
-                  策略文件位置：<code className="bg-slate-200 px-1 rounded">lib/crawl/strategies/</code>
-                  | 注册文件：<code className="bg-slate-200 px-1 rounded">lib/crawl/strategies/index.ts</code>
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* 洞察生成流程 */}
-          <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">商业洞察生成流程</h2>
-            <div className="space-y-6">
-              {INSIGHT_WORKFLOW.map((phase) => (
-                <div key={phase.phase} className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
-                  <div className="flex items-center gap-3 px-6 py-4 bg-slate-50 border-b border-slate-200">
-                    <span className="text-2xl">{phase.icon}</span>
-                    <h3 className="font-semibold text-ink">{phase.phase}</h3>
-                  </div>
-                  <div className="p-6">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {phase.steps.map((step, idx) => (
-                        <div key={idx} className="flex items-start gap-3 p-4 rounded-lg bg-slate-50 border border-slate-100">
-                          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-moss/10 text-moss text-xs font-medium flex items-center justify-center">
-                            {idx + 1}
-                          </span>
-                          <div>
-                            <p className="text-sm font-medium text-ink">{step.title}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">{step.desc}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* 主题分类 */}
-          <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">主题分类体系</h2>
-            <div className="rounded-2xl bg-white border border-slate-200 p-6">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {TOPIC_TAGS.map((topic) => (
-                  <div key={topic.key} className="p-4 rounded-lg border border-slate-100 bg-slate-50">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm font-semibold text-ink">{topic.label}</span>
-                      <code className="text-xs bg-slate-200 px-1.5 rounded text-slate-500">{topic.key}</code>
-                    </div>
-                    <p className="text-xs text-slate-500">{topic.desc}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 p-4 rounded-lg bg-amber-50 border border-amber-200">
-                <p className="text-sm text-amber-800">
-                  <span className="font-medium">分类优先级：</span>
-                  insight_topic_tags → insight_event_type → category/insight_type → market（兜底）
-                </p>
-                <p className="text-xs text-amber-600 mt-1">
-                  mapToTopic() 函数位于 pages/insights.tsx，负责将原始数据映射到主题分类
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* 证据类型 */}
-          <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">证据类型筛选</h2>
-            <div className="rounded-2xl bg-white border border-slate-200 p-6">
-              <div className="flex flex-wrap gap-2">
-                {EVIDENCE_TYPES.map((type) => (
-                  <span key={type.key} className="px-3 py-1.5 rounded-lg bg-slate-100 text-sm text-slate-600">
-                    {type.label}
-                  </span>
-                ))}
-              </div>
-              <p className="text-xs text-slate-400 mt-3">
-                证据类型在 filteredItems useMemo 中通过 getEntityType() 判断，用于筛选不同类型的原始文档
-              </p>
-            </div>
-          </section>
-
-          {/* 61条如何变成聚合洞察 */}
-          <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">61条原始信息如何变成聚合洞察</h2>
-            <div className="rounded-2xl bg-white border border-slate-200 p-6 space-y-6">
-
-              {/* 第一步：数据来源 */}
-              <div className="border-l-4 border-sky-400 pl-4">
-                <h3 className="text-sm font-semibold text-ink mb-2">📰 第一步：原始数据（61条）</h3>
-                <p className="text-xs text-slate-600 mb-2">从12家目标公司官网抓取的原始信息，每条包含：</p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="px-2 py-1 rounded bg-slate-100 text-xs text-slate-600">title（标题）</span>
-                  <span className="px-2 py-1 rounded bg-slate-100 text-xs text-slate-600">summary（摘要）</span>
-                  <span className="px-2 py-1 rounded bg-slate-100 text-xs text-slate-600">date（日期）</span>
-                  <span className="px-2 py-1 rounded bg-slate-100 text-xs text-slate-600">company（公司）</span>
-                  <span className="px-2 py-1 rounded bg-slate-100 text-xs text-slate-600">url（链接）</span>
-                </div>
-                <p className="text-xs text-slate-500 mt-2 italic">示例：华为发布乾崑智能驾驶方案 | 2026-03-20 | 华为乾崑 | auto.huawei.com/...</p>
-              </div>
-
-              {/* 箭头 */}
-              <div className="flex justify-center">
-                <svg className="w-6 h-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                </svg>
-              </div>
-
-              {/* 第二步：质量过滤 */}
-              <div className="border-l-4 border-amber-400 pl-4">
-                <h3 className="text-sm font-semibold text-ink mb-2">🧹 第二步：质量过滤（61条 → 50条）</h3>
-                <p className="text-xs text-slate-600 mb-2">过滤低质量内容，保留有效信息：</p>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-red-400">✗</span>
-                    <span className="text-xs text-slate-600">Policy / Menu / Read more / 空白标题</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-red-400">✗</span>
-                    <span className="text-xs text-slate-600">/index.html、站点首页、列表页尾</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-emerald-400">✓</span>
-                    <span className="text-xs text-slate-600">保留：有实质内容的新闻、公告、发布</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* 箭头 */}
-              <div className="flex justify-center">
-                <svg className="w-6 h-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                </svg>
-              </div>
-
-              {/* 第三步：LLM分析 */}
-              <div className="border-l-4 border-violet-400 pl-4">
-                <h3 className="text-sm font-semibold text-ink mb-2">🤖 第三步：DeepSeek LLM 分析（生成聚合洞察）</h3>
-                <p className="text-xs text-slate-600 mb-3">这是最核心的一步！LLM 基于"提示词"对50条有效信息进行聚合商业判断，生成结构化洞察报告。</p>
-
-                {/* 提示词明文展示 */}
-                <div className="space-y-4">
-                  <div className="rounded-lg bg-slate-900 text-slate-100 p-4 font-mono text-xs overflow-x-auto">
-                    <p className="text-emerald-400 mb-2">【System Prompt - 系统提示词】</p>
-                    <pre className="whitespace-pre-wrap">{`你是汽车电子基础软件行业的高级商业洞察分析助手，服务对象是普华基础软件有限公司的管理层、业务部门、产品部门、生态合作部门和信息化部门。
-
-你将收到一批时间窗内的动态信息条目。你的任务不是逐条复述，而是做聚合商业判断。
-
-【输出格式强制要求】
-1. 只输出合法JSON，不输出任何其他内容
-2. 不输出 markdown 代码块
-3. 不输出任何解释性文字
-4. 不输出引言、总结或前后文
-5. 每个字符串字段不超过200字符
-6. top_changes 不超过5条
-7. company_insights 不超过5条
-8. management_actions 不超过5条
-
-【核心原则】
-1. 只基于输入证据，不编造
-2. 不说空话套话，如"行业持续发展、竞争日趋激烈"
-3. 如果证据不足或样本集中，要明确说明结论的边界
-4. 结论措辞要适度：多用"建议优先评估、建议重点验证"
-
-【重点关注】
-- 产品技术：新产品/方案发布、技术突破、量产进展
-- 生态合作：战略合作、标准推进、生态绑定
-- 市场动作：客户拓展、融资、产能变化
-- 组织变化：关键人才、战略调整
-
-【对普华影响分类】
-- 竞争压力：威胁普华市场地位的动作
-- 合作机会：可借鉴或可参与的机会
-- 产品/市场参考：产品策略、市场定位参考
-
-【管理动作要求】
-- management_actions 要落到具体部门（产品/平台、市场/售前、生态/合作）
-- 每条建议要包含：哪个部门做什么，为什么
-
-【结论边界要求】
-- 如果只有单条证据就说"趋势"，明确说明"样本有限，单条证据仅供参考"
-- 如果行业分布集中（如某公司占80%），要说明"本期洞察主要由某公司驱动，结论不代表行业整体"
-- 对普华影响要有具体指向，不要泛泛写"值得关注"而是写"建议XX部门关注XX"`}</pre>
-                  </div>
-
-                  {/* 提示词作用分解 */}
-                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
-                    <p className="text-sm font-semibold text-amber-800 mb-3">📌 提示词各部分的作用</p>
-                    <div className="space-y-2 text-xs">
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="font-medium text-slate-700">提示词部分</div>
-                        <div className="font-medium text-slate-700">作用</div>
-                        <div className="font-medium text-slate-700">如果不写会怎样</div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
-                        <div className="text-slate-600">"不逐条复述，而是聚合商业判断"</div>
-                        <div className="text-slate-600">防止 LLM 做"复读机"</div>
-                        <div className="text-slate-600">报告变成新闻列表，没有分析</div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
-                        <div className="text-slate-600">"不说空话套话"</div>
-                        <div className="text-slate-600">防止废话输出</div>
-                        <div className="text-slate-600">"行业持续发展"这种无用句子</div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
-                        <div className="text-slate-600">"证据不足说明边界"</div>
-                        <div className="text-slate-600">防止过度推断</div>
-                        <div className="text-slate-600">单条证据被说成"行业趋势"</div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
-                        <div className="text-slate-600">"落到具体部门"</div>
-                        <div className="text-slate-600">报告可执行</div>
-                        <div className="text-slate-600">"建议关注"不知道谁来做</div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
-                        <div className="text-slate-600">"竞争压力/合作机会分类"</div>
-                        <div className="text-slate-600">分析有普华视角</div>
-                        <div className="text-slate-600">泛泛而谈，没有针对性</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 质量保证机制 */}
-                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
-                    <p className="text-sm font-semibold text-emerald-800 mb-2">📊 置信率保证机制</p>
-                    <div className="grid md:grid-cols-2 gap-3 text-xs text-emerald-700">
-                      <div className="flex items-start gap-2">
-                        <span className="font-bold">1.</span>
-                        <span><strong>证据数量限制</strong>：top_changes 不超过5条，每条都是精选的</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="font-bold">2.</span>
-                        <span><strong>单条证据边界</strong>：要说明"样本有限"，不会以偏概全</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="font-bold">3.</span>
-                        <span><strong>分布集中说明</strong>：某公司占80%要说明"主要由某公司驱动"</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="font-bold">4.</span>
-                        <span><strong>措辞边界</strong>：多用"建议优先"，不用"必须立即否则"</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 输入输出例子 */}
-                  <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
-                    <p className="text-sm font-semibold text-slate-700 mb-2">📝 输入→输出例子</p>
-                    <div className="space-y-2 text-xs">
-                      <div>
-                        <p className="font-medium text-slate-600 mb-1">输入数据（3条新闻）：</p>
-                        <div className="bg-slate-100 p-2 rounded text-slate-600 font-mono">
-                          1. 经纬恒润发布ZCU技术白皮书 | 2026-03-27<br/>
-                          2. 丰田与电装合资推进车载SoC研发 | 2026-03-25<br/>
-                          3. 法雷奥投资2.25亿美元在美国建厂 | 2026-03-20
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-medium text-slate-600 mb-1">LLM 输出的洞察：</p>
-                        <div className="bg-slate-100 p-2 rounded text-slate-600 font-mono">
-                          top_changes[0] = &#123;<br/>
-                          &nbsp;&nbsp;title: "经纬恒润发布ZCU白皮书",<br/>
-                          &nbsp;&nbsp;judgement: "新产品发布，在区域控制器领域与普华形成竞争",<br/>
-                          &nbsp;&nbsp;to_phua_impact: "竞争压力",<br/>
-                          &nbsp;&nbsp;recommended_action: "建议产品部门验证Autosar方案与ZCU兼容性"<br/>
-                          &#125;
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* 箭头 */}
-              <div className="flex justify-center">
-                <svg className="w-6 h-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                </svg>
-              </div>
-
-              {/* 第四步：结构化输出 */}
-              <div className="border-l-4 border-emerald-400 pl-4">
-                <h3 className="text-sm font-semibold text-ink mb-2">💡 第四步：结构化输出（5大模块）</h3>
-                <p className="text-xs text-slate-600 mb-3">LLM 输出的结构化洞察：</p>
-                
-                <div className="space-y-3">
-                  <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-100">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-bold text-emerald-700">window_summary</span>
-                      <span className="text-xs text-emerald-500">执行摘要</span>
-                    </div>
-                    <p className="text-xs text-emerald-600">→ 本期最值得关注的3件事 + 信号强度 + 边界说明</p>
-                    <p className="text-xs text-slate-500 mt-1 italic">"近30天产品技术信号最活跃（18次命中），行业关注点集中于此"</p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-bold text-blue-700">top_changes</span>
-                      <span className="text-xs text-blue-500">重点变化（3-5条）</span>
-                    </div>
-                    <p className="text-xs text-blue-600">→ 每条包含：标题 + 判断 + 重要性 + 对普华影响 + 建议动作</p>
-                    <p className="text-xs text-slate-500 mt-1 italic">"华为发布乾崑智能驾驶方案 → 需评估对基础软件兼容性需求"</p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-100">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-bold text-amber-700">phua_impacts</span>
-                      <span className="text-xs text-amber-500">对普华影响（三栏）</span>
-                    </div>
-                    <p className="text-xs text-amber-600">→ 竞争压力 / 合作机会 / 产品市场参考</p>
-                    <p className="text-xs text-slate-500 mt-1 italic">"中科创达座舱方案可能压缩普华在长安的项目机会"</p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-violet-50 border border-violet-100">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-bold text-violet-700">company_insights</span>
-                      <span className="text-xs text-violet-500">重点公司观察</span>
-                    </div>
-                    <p className="text-xs text-violet-600">→ 每公司：信号级别 + 核心动作 + 商业含义 + 对普华</p>
-                  </div>
-
-                  <div className="p-3 rounded-lg bg-rose-50 border border-rose-100">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-bold text-rose-700">management_actions</span>
-                      <span className="text-xs text-rose-500">管理动作建议</span>
-                    </div>
-                    <p className="text-xs text-rose-600">→ 部门 + 具体动作 + 优先级 + 原因</p>
-                    <p className="text-xs text-slate-500 mt-1 italic">"建议市场/售前团队：尽快对接长安，了解智能驾驶方案选型计划，原因：华为已获长安量产定点"</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* 证据链说明 */}
-              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
-                <h4 className="text-sm font-semibold text-ink mb-2">🔗 证据链：每条洞察都可追溯</h4>
-                <div className="space-y-2 text-xs text-slate-600">
-                  <div className="flex items-start gap-2">
-                    <span className="text-violet-500 font-bold">1.</span>
-                    <span><strong>原始数据</strong> → 12家公司官网发布的61条新闻（含标题、链接、日期）</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-violet-500 font-bold">2.</span>
-                    <span><strong>质量过滤</strong> → 过滤后保留50条有效信息（去除 Policy/Menu/首页等）</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-violet-500 font-bold">3.</span>
-                    <span><strong>LLM 聚合</strong> → DeepSeek 基于 Prompt 分析50条，输出结构化判断</span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="text-violet-500 font-bold">4.</span>
-                    <span><strong>结果溯源</strong> → 用户可点击洞察卡片，查看对应原始新闻链接</span>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </section>
-
-          {/* LLM 分类阶段详解 */}
-          <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">LLM 分类阶段详解（Stage 1）</h2>
-            <div className="rounded-2xl bg-white border border-slate-200 p-6 space-y-6">
-              <div className="p-4 rounded-lg bg-violet-50 border border-violet-200">
-                <p className="text-sm text-violet-800">
-                  <span className="font-semibold">为什么需要分类？</span>
-                  原始新闻来自12家公司，主题杂乱。分类可以帮助：1) 过滤噪音（如政策页面）；2) 按主题筛选查看；3) 为后续聚合阶段提供结构化输入。
-                </p>
-              </div>
-
-              <div className="border-l-4 border-violet-400 pl-4">
-                <h3 className="text-sm font-semibold text-ink mb-2">🏷️ 分类 Prompt 明文</h3>
-                <div className="bg-slate-900 text-slate-100 p-4 rounded font-mono text-xs overflow-x-auto">
-                  <pre className="whitespace-pre-wrap">{`你是一个专业的汽车行业商业新闻分类助手。请分析以下新闻，判断每个属于哪个分类。
-
-分类标准（必须严格选择其一）：
-- 产品技术：新品发布、产品获奖、技术突破、研发进展、专利算法、系统升级
-- 生态合作：战略合作、联盟签约、生态伙伴奖、标准参与、并购整合
-- 战略动向：融资动态、财报业绩、产能扩张、高管变动、上市、投资
-- 政策法规：政府政策、行业标准、监管动态、合规要求、认证
-- 人才动态：招聘需求、人才趋势、技能要求、社招、校招
-
-返回JSON格式（只返回JSON，不要其他内容）：
-{"items":[{"id":"1","category":"分类名称","reason":"简短分类理由"},...]}`}</pre>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
-                <p className="text-sm font-semibold text-amber-800 mb-3">📌 分类 Prompt 设计解析</p>
-                <div className="space-y-3 text-xs text-amber-700">
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="font-medium text-slate-700">Prompt 部分</div>
-                    <div className="font-medium text-slate-700">作用</div>
-                    <div className="font-medium text-slate-700">如果不写会怎样</div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
-                    <div className="text-slate-600">"必须严格选择其一"</div>
-                    <div className="text-slate-600">防止模糊分类</div>
-                    <div className="text-slate-600">新闻被归为多个类别或"其他"</div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
-                    <div className="text-slate-600">5大分类明确界定</div>
-                    <div className="text-slate-600">标准统一可执行</div>
-                    <div className="text-slate-600">不同人/次分类结果不一致</div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
-                    <div className="text-slate-600">返回 JSON 格式</div>
-                    <div className="text-slate-600">便于程序解析</div>
-                    <div className="text-slate-600">需要额外解析步骤</div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
-                    <div className="text-slate-600">包含 reason 理由</div>
-                    <div className="text-slate-600">可追溯分类逻辑</div>
-                    <div className="text-slate-600">无法调试错误分类</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
-                <p className="text-sm font-semibold text-emerald-800 mb-2">📊 分类类别说明</p>
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
-                  <div className="p-2 rounded bg-emerald-100/50">
-                    <span className="font-semibold text-emerald-700">产品技术</span>
-                    <p className="text-emerald-600 mt-1">新品发布、获奖、技术突破、研发进展、专利、系统升级</p>
-                  </div>
-                  <div className="p-2 rounded bg-blue-100/50">
-                    <span className="font-semibold text-blue-700">生态合作</span>
-                    <p className="text-blue-600 mt-1">战略合作、联盟签约、生态伙伴奖、标准参与、并购整合</p>
-                  </div>
-                  <div className="p-2 rounded bg-amber-100/50">
-                    <span className="font-semibold text-amber-700">战略动向</span>
-                    <p className="text-amber-600 mt-1">融资、财报、产能扩张、高管变动、上市、投资</p>
-                  </div>
-                  <div className="p-2 rounded bg-violet-100/50">
-                    <span className="font-semibold text-violet-700">政策法规</span>
-                    <p className="text-violet-600 mt-1">政府政策、行业标准、监管动态、合规要求、认证</p>
-                  </div>
-                  <div className="p-2 rounded bg-rose-100/50">
-                    <span className="font-semibold text-rose-700">人才动态</span>
-                    <p className="text-rose-600 mt-1">招聘需求、人才趋势、技能要求、社招、校招</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
-                <p className="text-sm font-semibold text-slate-700 mb-2">📝 输入→输出例子</p>
-                <div className="space-y-2 text-xs">
-                  <div>
-                    <p className="font-medium text-slate-600 mb-1">输入数据（3条原始新闻）：</p>
-                    <div className="bg-slate-100 p-2 rounded text-slate-600 font-mono">
-                      1. 华为发布乾崑智能驾驶解决方案 V2.0<br/>
-                      2. 普华基础软件与中科创达签署战略合作协议<br/>
-                      3. 经纬恒润招聘高级嵌入式软件工程师
-                    </div>
-                  </div>
-                  <div>
-                    <p className="font-medium text-slate-600 mb-1">LLM 返回的 JSON：</p>
-                    <div className="bg-slate-100 p-2 rounded text-slate-600 font-mono">
-                      &#123;"items":[<br/>
-                      &nbsp;&nbsp;&#123;"id":"1","category":"产品技术","reason":"智能驾驶解决方案发布属于产品技术类"&#125;,<br/>
-                      &nbsp;&nbsp;&#123;"id":"2","category":"生态合作","reason":"战略合作协议属于生态合作类"&#125;,<br/>
-                      &nbsp;&nbsp;&#123;"id":"3","category":"人才动态","reason":"招聘需求属于人才动态类"&#125;<br/>
-                      ]&#125;
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-lg bg-red-50 border border-red-200">
-                <p className="text-sm font-semibold text-red-800 mb-2">⚠️ 分类失败降级机制</p>
-                <p className="text-xs text-red-700">
-                  如果 DeepSeek API 调用失败（如网络错误、超时），系统不会中断，而是降级到 <code className="bg-red-100 px-1 rounded">guessCategory()</code> 函数，
-                  基于规则（关键词匹配）进行分类。例如：标题含"招聘"→人才动态，含"融资"→战略动向。
-                </p>
-                <p className="text-xs text-red-600 mt-2">
-                  分类阶段失败不影响整体流程，但分类准确性会下降。
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* 三大洞察输出详解 */}
-          <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">三大洞察输出详解</h2>
-            <div className="space-y-6">
-
-              {/* 聚合洞察 */}
-              <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
-                <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-violet-50 to-purple-50 border-b border-slate-200">
-                  <span className="text-2xl">💡</span>
-                  <div>
-                    <h3 className="font-semibold text-ink">聚合洞察（页面显示）</h3>
-                    <p className="text-xs text-slate-500">页面加载时自动生成，用户进入页面即可见</p>
-                  </div>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
-                      <p className="text-xs font-medium text-slate-500 mb-2">调用时机</p>
-                      <p className="text-sm text-ink">用户访问 /insights 页面时自动调用</p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
-                      <p className="text-xs font-medium text-slate-500 mb-2">API 端点</p>
-                      <p className="text-sm text-ink font-mono">/api/insights/generate-brief</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-medium text-slate-500 mb-2">输出内容（5大模块）</p>
-                    <div className="space-y-2">
-                      <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-100">
-                        <span className="text-emerald-600 font-bold text-sm w-36">window_summary</span>
-                        <div>
-                          <p className="text-sm font-medium text-emerald-800">执行摘要</p>
-                          <p className="text-xs text-emerald-600">overall_judgement: 本期最值得关注的3件事</p>
-                          <p className="text-xs text-emerald-600">signal_density: 信号强度（高/中/低）</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 border border-blue-100">
-                        <span className="text-blue-600 font-bold text-sm w-36">top_changes</span>
-                        <div>
-                          <p className="text-sm font-medium text-blue-800">本期重点变化（3-5条）</p>
-                          <p className="text-xs text-blue-600">title/judgement/why_important/to_phua_impact/recommended_action</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 border border-amber-100">
-                        <span className="text-amber-600 font-bold text-sm w-36">phua_impacts</span>
-                        <div>
-                          <p className="text-sm font-medium text-amber-800">对普华影响（三栏）</p>
-                          <p className="text-xs text-amber-600">competition_pressure: 竞争压力</p>
-                          <p className="text-xs text-amber-600">cooperation_opportunities: 合作机会</p>
-                          <p className="text-xs text-amber-600">product_market_reference: 产品/市场参考</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3 p-3 rounded-lg bg-violet-50 border border-violet-100">
-                        <span className="text-violet-600 font-bold text-sm w-36">company_insights</span>
-                        <div>
-                          <p className="text-sm font-medium text-violet-800">重点公司观察</p>
-                          <p className="text-xs text-violet-600">company/signal_level/main_move/business_meaning/to_phua_impact</p>
-                        </div>
-                      </div>
-                      <div className="flex items-start gap-3 p-3 rounded-lg bg-rose-50 border border-rose-100">
-                        <span className="text-rose-600 font-bold text-sm w-36">management_actions</span>
-                        <div>
-                          <p className="text-sm font-medium text-rose-800">管理动作建议</p>
-                          <p className="text-xs text-rose-600">department/action/priority/reason</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
-                    <p className="text-xs font-medium text-slate-500 mb-3">⭐ 核心 Prompt 明文（System Prompt）</p>
-                    <div className="bg-slate-900 text-slate-100 p-3 rounded font-mono text-xs overflow-x-auto max-h-64">
-                      <pre className="whitespace-pre-wrap">{`你是汽车电子基础软件行业的高级商业洞察分析助手，服务对象是普华基础软件有限公司的管理层、业务部门、产品部门、生态合作部门和信息化部门。
-
-你将收到一批时间窗内的动态信息条目。你的任务不是逐条复述，而是做聚合商业判断。
-
-【输出格式强制要求】
-1. 只输出合法JSON，不输出任何其他内容
-2. 不输出 markdown 代码块
-3. 不输出任何解释性文字
-4. 不输出引言、总结或前后文
-5. 每个字符串字段不超过200字符
-
-【核心原则】
-1. 只基于输入证据，不编造
-2. 不说空话套话，如"行业持续发展、竞争日趋激烈"
-3. 如果证据不足或样本集中，要明确说明结论的边界
-4. 结论措辞要适度：多用"建议优先评估、建议重点验证"
-
-【对普华影响分类】
-- 竞争压力：威胁普华市场地位的动作
-- 合作机会：可借鉴或可参与的机会
-- 产品/市场参考：产品策略、市场定位参考
-
-【管理动作要求】
-- management_actions 要落到具体部门（产品/平台、市场/售前、生态/合作）
-- 每条建议要包含：哪个部门做什么，为什么
-
-【结论边界要求】
-- 如果只有单条证据就说"趋势"，明确说明"样本有限，单条证据仅供参考"
-- 如果行业分布集中（如某公司占80%），要说明"本期洞察主要由某公司驱动"
-- 对普华影响要有具体指向，不要泛泛写"值得关注"而是写"建议XX部门关注XX"`}</pre>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
-                    <p className="text-sm font-semibold text-amber-800 mb-2">📌 提示词关键设计说明</p>
-                    <div className="space-y-2 text-xs text-amber-700">
-                      <div className="flex items-start gap-2">
-                        <span className="font-bold">"不逐条复述"</span>
-                        <span>→ 防止 LLM 做复读机，要求做商业判断</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="font-bold">"不说空话套话"</span>
-                        <span>→ 防止"行业持续发展"这种废话</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="font-bold">"落到具体部门"</span>
-                        <span>→ 报告可执行，不是"建议关注"这种空话</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="font-bold">"说明结论边界"</span>
-                        <span>→ 单条证据不夸大，样本集中要说明</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* 商业洞察报告 */}
-              <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
-                <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-slate-200">
-                  <span className="text-2xl">📊</span>
-                  <div>
-                    <h3 className="font-semibold text-ink">商业洞察报告（弹窗生成）</h3>
-                    <p className="text-xs text-slate-500">点击"生成洞察报告"按钮，选择简版/管理层报告后生成</p>
-                  </div>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
-                      <p className="text-xs font-medium text-slate-500 mb-2">调用时机</p>
-                      <p className="text-sm text-ink">用户点击"生成洞察报告"按钮，在弹窗中选择报告类型后调用</p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
-                      <p className="text-xs font-medium text-slate-500 mb-2">API 端点</p>
-                      <p className="text-sm text-ink font-mono">/api/insights/report</p>
-                    </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="p-4 rounded-lg bg-amber-50 border border-amber-100">
-                      <p className="text-xs font-medium text-amber-600 mb-1">📝 简版报告</p>
-                      <p className="text-xs text-amber-600">重点变化 3 条，管理动作 3 条</p>
-                      <p className="text-xs text-amber-600 mt-1">适合快速浏览</p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-violet-50 border border-violet-100">
-                      <p className="text-xs font-medium text-violet-600 mb-1">📊 管理层报告</p>
-                      <p className="text-xs text-violet-600">重点变化 5 条，管理动作 5 条</p>
-                      <p className="text-xs text-violet-600 mt-1">适合管理层汇报</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-medium text-slate-500 mb-2">与聚合洞察的区别</p>
-                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
-                      <div className="flex items-start gap-2">
-                        <span className="text-emerald-500">✓</span>
-                        <p className="text-xs text-slate-600">传入数据：直接传入原始新闻（compactItems），不是已聚合的二手数据</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-emerald-500">✓</span>
-                        <p className="text-xs text-slate-600">Prompt 要求：内容具体到公司名、产品名、事件名</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-emerald-500">✓</span>
-                        <p className="text-xs text-slate-600">区分简版/管理层：内容详细程度不同</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-emerald-500">✓</span>
-                        <p className="text-xs text-slate-600">输出格式：Markdown</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
-                    <p className="text-xs font-medium text-slate-500 mb-3">⭐ 核心 Prompt 明文</p>
-                    <div className="bg-slate-900 text-slate-100 p-3 rounded font-mono text-xs overflow-x-auto max-h-48">
-                      <pre className="whitespace-pre-wrap">{`直接基于原始新闻生成报告，不是基于聚合洞察再加工。
-
-【简版报告要求】
-- top_changes 只保留最重要的3条，每条包含公司名、产品名、事件名
-- management_actions 只保留3条
-- 结论要有具体依据，不泛泛而谈
-
-【管理层报告要求】
-- top_changes 保留5条，内容更详细，增加背景和分析深度
-- management_actions 保留5条
-- 适合管理层汇报，每条结论要有支撑数据或事件
-
-【单公司报告要求】
-- 重点写该公司，其他公司只作为对标/合作对象提及
-- 先写该公司近30天最重要动作，再写对普华的具体影响
-
-【结论要求】
-- 每条结论都要有具体依据：具体到公司名、产品名、合作事件名
-- 如果证据不足，明确写"当前公开信息有限，建议继续跟踪"
-- 不用"必须/立即/否则"，多用"建议优先/建议重点/若趋势延续则可能"`}</pre>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
-                    <p className="text-sm font-semibold text-emerald-800 mb-2">📌 与聚合洞察的本质区别</p>
-                    <div className="space-y-2 text-xs text-emerald-700">
-                      <div className="flex items-start gap-2">
-                        <span className="font-bold">1.</span>
-                        <span><strong>数据来源不同</strong>：聚合洞察用已聚合并排序的数据，商业洞察报告直接用原始新闻</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="font-bold">2.</span>
-                        <span><strong>详细程度不同</strong>：商业洞察报告要求具体到公司名、产品名、事件名</span>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="font-bold">3.</span>
-                        <span><strong>用途不同</strong>：聚合洞察是页面展示，商业洞察报告是可下载的 Markdown</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Markdown报告 */}
-              <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
-                <div className="flex items-center gap-3 px-6 py-4 bg-gradient-to-r from-sky-50 to-cyan-50 border-b border-slate-200">
-                  <span className="text-2xl">📥</span>
-                  <div>
-                    <h3 className="font-semibold text-ink">Markdown 报告（下载）</h3>
-                    <p className="text-xs text-slate-500">点击"下载 Markdown 报告"按钮，直接下载文件</p>
-                  </div>
-                </div>
-                <div className="p-6 space-y-4">
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
-                      <p className="text-xs font-medium text-slate-500 mb-2">调用时机</p>
-                      <p className="text-sm text-ink">用户点击"下载 Markdown 报告"按钮，直接下载</p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-100">
-                      <p className="text-xs font-medium text-slate-500 mb-2">API 端点</p>
-                      <p className="text-sm text-ink font-mono">/api/insights/generate-report</p>
-                    </div>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-100">
-                      <p className="text-xs font-medium text-emerald-600 mb-1">✅ 优先复用 brief_data</p>
-                      <p className="text-xs text-emerald-600">当页面已有聚合洞察时，直接复用，不重新调用 DeepSeek</p>
-                    </div>
-                    <div className="p-4 rounded-lg bg-amber-50 border border-amber-100">
-                      <p className="text-xs font-medium text-amber-600 mb-1">📋 报告结构</p>
-                      <p className="text-xs text-amber-600">报告说明 → 执行摘要 → 重点变化 → 对普华影响 → 管理动作</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs font-medium text-slate-500 mb-2">与商业洞察报告的区别</p>
-                    <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
-                      <div className="flex items-start gap-2">
-                        <span className="text-emerald-500">✓</span>
-                        <p className="text-xs text-slate-600">数据来源：复用页面已生成的聚合洞察（brief_data）</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-emerald-500">✓</span>
-                        <p className="text-xs text-slate-600">不需要重新调用 DeepSeek，节省 API 成本</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-emerald-500">✓</span>
-                        <p className="text-xs text-slate-600">内容与页面聚合洞察一致，只是 Markdown 格式</p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-emerald-500">✓</span>
-                        <p className="text-xs text-slate-600">报告类型：总览简报（全部公司）/ 观察简报（单公司）</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </section>
-
-          {/* API 端点 */}
-          <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">核心 API 端点</h2>
-            <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">端点</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">方法</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-slate-500">功能</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  <tr>
-                    <td className="px-4 py-3 font-mono text-xs text-violet-600">/api/insights/generate-brief</td>
-                    <td className="px-4 py-3"><span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 text-xs">POST</span></td>
-                    <td className="px-4 py-3 text-sm text-slate-600">聚合洞察：window_summary / top_changes / company_insights / phua_impacts / management_actions</td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-3 font-mono text-xs text-violet-600">/api/insights/generate-report</td>
-                    <td className="px-4 py-3"><span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 text-xs">POST</span></td>
-                    <td className="px-4 py-3 text-sm text-slate-600">Markdown 报告生成，支持传入 brief_data 复用</td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-3 font-mono text-xs text-violet-600">/api/insights/enrich-one</td>
-                    <td className="px-4 py-3"><span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 text-xs">POST</span></td>
-                    <td className="px-4 py-3 text-sm text-slate-600">单条信息增强，补充 insight_* 字段</td>
-                  </tr>
-                  <tr>
-                    <td className="px-4 py-3 font-mono text-xs text-violet-600">/api/all-items</td>
-                    <td className="px-4 py-3"><span className="px-2 py-0.5 rounded bg-sky-100 text-sky-700 text-xs">GET</span></td>
-                    <td className="px-4 py-3 text-sm text-slate-600">获取全部原始文档列表</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          {/* 低质量过滤规则 */}
-          <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">低质量内容过滤规则</h2>
-            <div className="rounded-2xl bg-white border border-slate-200 p-6">
+            ) : (
               <div className="space-y-4">
-                <div>
-                  <h4 className="text-sm font-medium text-ink mb-2">isLowQualityTitle() - 标题过滤</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {["Policy", "Menu", "Policy menu", "Read more", "Learn more", "Click here", "导航", "空白标题", "纯日期"].map((item) => (
-                      <span key={item} className="px-2 py-1 rounded bg-red-50 border border-red-200 text-xs text-red-700">
-                        {item}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-ink mb-2">LOW_VALUE_PATTERNS - 综合模式</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {["车型报价类", "用户生成内容", "视频内容", "工具类", "评测对比类", "站点首页类", "频道首页类", "版权信息"].map((item) => (
-                      <span key={item} className="px-2 py-1 rounded bg-amber-50 border border-amber-200 text-xs text-amber-700">
-                        {item}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <h4 className="text-sm font-medium text-ink mb-2">isSiteHomepage() - 首页过滤</h4>
-                  <p className="text-xs text-slate-500">过滤 /index.html、纯域名 URL、/news/、/products/ 等列表页尾</p>
-                </div>
+                {llmTraces.map((trace) => (
+                  <ReasoningTrace key={trace.id} trace={trace} />
+                ))}
               </div>
-              <div className="mt-4 p-4 rounded-lg bg-slate-50 border border-slate-200">
-                <p className="text-xs text-slate-500">
-                  过滤函数位于 <code className="bg-slate-200 px-1 rounded">pages/insights.tsx</code>，
-                  同时下沉到 <code className="bg-slate-200 px-1 rounded">generate-brief.ts</code> 和 <code className="bg-slate-200 px-1 rounded">generate-report.ts</code>
-                </p>
-              </div>
-            </div>
+            )}
           </section>
 
-          {/* LLM 调试指南 */}
+          <PromptConstraints />
+
           <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">LLM 调试指南</h2>
-            <div className="rounded-2xl bg-white border border-slate-200 p-6 space-y-6">
-              <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
-                <p className="text-sm text-amber-800">
-                  <span className="font-semibold">什么时候需要调试 LLM 输出？</span>
-                  当洞察报告出现：1) 结论空洞（"行业持续发展"）；2) 分类错误；3) 遗漏重要信息；4) 结论过度推断时，需要检查 Prompt 设计。
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-ink mb-3">🔍 常见问题与解决方案</h3>
-                <div className="space-y-3">
-                  <div className="p-4 rounded-lg border border-slate-200">
-                    <p className="text-xs font-medium text-red-600 mb-1">问题：报告出现"行业持续发展、竞争日趋激烈"等废话</p>
-                    <p className="text-xs text-slate-600 mb-1"><span className="font-semibold">原因：</span>Prompt 没有明确禁止空话套话</p>
-                    <p className="text-xs text-slate-600"><span className="font-semibold">解决：</span>在核心原则中添加"不说空话套话，如'行业持续发展、竞争日趋激烈'"</p>
-                  </div>
-                  <div className="p-4 rounded-lg border border-slate-200">
-                    <p className="text-xs font-medium text-red-600 mb-1">问题：单条证据被夸大成"行业趋势"</p>
-                    <p className="text-xs text-slate-600 mb-1"><span className="font-semibold">原因：</span>Prompt 没有要求说明结论边界</p>
-                    <p className="text-xs text-slate-600"><span className="font-semibold">解决：</span>添加"如果只有单条证据就说'趋势'，明确说明'样本有限，单条证据仅供参考'"</p>
-                  </div>
-                  <div className="p-4 rounded-lg border border-slate-200">
-                    <p className="text-xs font-medium text-red-600 mb-1">问题：管理建议写成"建议关注XX"（不知道谁来做）</p>
-                    <p className="text-xs text-slate-600 mb-1"><span className="font-semibold">原因：</span>Prompt 没有要求落到具体部门</p>
-                    <p className="text-xs text-slate-600"><span className="font-semibold">解决：</span>添加"management_actions 要落到具体部门（产品/平台、市场/售前、生态/合作），每条建议要包含：哪个部门做什么，为什么"</p>
-                  </div>
-                  <div className="p-4 rounded-lg border border-slate-200">
-                    <p className="text-xs font-medium text-red-600 mb-1">问题：分类结果不准确（如合作新闻被归为产品技术）</p>
-                    <p className="text-xs text-slate-600 mb-1"><span className="font-semibold">原因：</span>分类标准定义不够清晰或重叠</p>
-                    <p className="text-xs text-slate-600"><span className="font-semibold">解决：</span>在分类 prompt 中明确各类别的边界关键词，如"战略合作"是生态合作，"技术突破"是产品技术</p>
-                  </div>
-                  <div className="p-4 rounded-lg border border-slate-200">
-                    <p className="text-xs font-medium text-red-600 mb-1">问题：报告结论过于模糊（"值得关注"）</p>
-                    <p className="text-xs text-slate-600 mb-1"><span className="font-semibold">原因：</span>Prompt 没有要求具体影响分析</p>
-                    <p className="text-xs text-slate-600"><span className="font-semibold">解决：</span>添加"对普华影响要有具体指向，不要泛泛写'值得关注'而是写'建议XX部门关注XX'"</p>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-ink mb-3">📐 Prompt 优化检查清单</h3>
-                <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
-                  <div className="space-y-2 text-xs text-slate-600">
-                    <div className="flex items-start gap-2">
-                      <span className="text-emerald-500 font-bold">✓</span>
-                      <span>明确禁止项：如"不说空话套话"、"不逐条复述"、"不输出 markdown"</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-emerald-500 font-bold">✓</span>
-                      <span>输出格式约束：JSON 结构、字段数量限制（如 top_changes 不超过5条）</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-emerald-500 font-bold">✓</span>
-                      <span>结论边界要求：证据不足时说明、单条证据不夸大、样本集中要说明</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-emerald-500 font-bold">✓</span>
-                      <span>具体性要求：落到公司名、产品名、事件名、具体部门</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-emerald-500 font-bold">✓</span>
-                      <span>措辞边界：多用"建议优先"，不用"必须立即否则"</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span className="text-emerald-500 font-bold">✓</span>
-                      <span>降级机制：API 失败时的 fallback 策略</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-ink mb-3">🧪 调试方法</h3>
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-lg bg-violet-50 border border-violet-100">
-                    <p className="text-xs font-semibold text-violet-700 mb-2">1. 直接测试 API</p>
-                    <p className="text-xs text-violet-600">使用 curl 直接调用 DeepSeek API，传入设计的 Prompt 和样本数据，检查输出是否符合理想</p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-100">
-                    <p className="text-xs font-semibold text-emerald-700 mb-2">2. 控制变量测试</p>
-                    <p className="text-xs text-emerald-600">保持其他条件不变，只修改 Prompt 某一部分，对比输出差异</p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-100">
-                    <p className="text-xs font-semibold text-amber-700 mb-2">3. 边界条件测试</p>
-                    <p className="text-xs text-amber-600">用单条证据、空白数据、异常数据测试，观察 Prompt 的约束是否有效</p>
-                  </div>
-                  <div className="p-4 rounded-lg bg-sky-50 border border-sky-100">
-                    <p className="text-xs font-semibold text-sky-700 mb-2">4. 温度参数调优</p>
-                    <p className="text-xs text-sky-600">当前使用 temperature=0.3（低随机性），如果需要更创造性输出可提高到 0.5-0.7</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-lg bg-slate-100 border border-slate-200">
-                <p className="text-xs text-slate-500">
-                  <span className="font-semibold">Prompt 文件位置：</span>
-                  <code className="bg-slate-200 px-1 rounded">lib/crawl/llmClassifier.ts</code>（分类阶段）|
-                  <code className="bg-slate-200 px-1 rounded">pages/api/insights/generate-brief.ts</code>（聚合阶段）|
-                  <code className="bg-slate-200 px-1 rounded">pages/api/insights/report.ts</code>（报告阶段）
-                </p>
-              </div>
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xl">⚙️</span>
+              <h3 className="font-semibold text-slate-800">快速导航</h3>
             </div>
-          </section>
-
-          {/* 快速导航 */}
-          <section>
-            <h2 className="text-lg font-semibold text-ink mb-4">快速导航</h2>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-3">
               <a href="/insights" className="rounded-2xl bg-emerald-50 border border-emerald-200 p-5 hover:bg-emerald-100 transition-colors">
                 <div className="text-2xl mb-2">💡</div>
                 <h3 className="font-semibold text-emerald-800">商业洞察</h3>
-                <p className="text-sm text-emerald-600 mt-1">查看聚合洞察、核心判断、重点变化</p>
+                <p className="text-sm text-emerald-600 mt-1">查看聚合洞察</p>
               </a>
               <a href="/workbench" className="rounded-2xl bg-sky-50 border border-sky-200 p-5 hover:bg-sky-100 transition-colors">
                 <div className="text-2xl mb-2">🕷️</div>
                 <h3 className="font-semibold text-sky-800">工作台</h3>
-                <p className="text-sm text-sky-600 mt-1">执行爬取、选择策略、查看结果</p>
+                <p className="text-sm text-sky-600 mt-1">执行爬取</p>
               </a>
-              <a href="/console" className="rounded-2xl bg-violet-50 border border-violet-200 p-5 hover:bg-violet-100 transition-colors">
-                <div className="text-2xl mb-2">🏢</div>
-                <h3 className="font-semibold text-violet-800">公司管理</h3>
-                <p className="text-sm text-violet-600 mt-1">配置目标公司和爬取规则</p>
+              <a href="/list-all" className="rounded-2xl bg-violet-50 border border-violet-200 p-5 hover:bg-violet-100 transition-colors">
+                <div className="text-2xl mb-2">📋</div>
+                <h3 className="font-semibold text-violet-800">全部文档</h3>
+                <p className="text-sm text-violet-600 mt-1">查看明细</p>
               </a>
             </div>
           </section>

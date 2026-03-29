@@ -1,13 +1,4 @@
 import Head from "next/head";
-import { useState, useEffect } from "react";
-
-interface ApiStatus {
-  name: string;
-  key: string;
-  status: "active" | "invalid" | "unauthorized" | "error" | "unknown";
-  message: string;
-  quota?: { message?: string };
-}
 
 const crawlTiers = [
   {
@@ -148,33 +139,6 @@ const coreModules = [
 ];
 
 export default function IntelligentCrawlDocPage() {
-  const [apiStatus, setApiStatus] = useState<ApiStatus[]>([
-    { name: "DeepSeek", key: "检查中...", status: "unknown", message: "加载中..." }
-  ]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastChecked, setLastChecked] = useState<string | null>(null);
-
-  const fetchApiStatus = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/status/apis");
-      if (!res.ok) throw new Error("Failed to fetch");
-      const data = await res.json();
-      setApiStatus(data.apis);
-      setLastChecked(new Date(data.checkedAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" }));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchApiStatus();
-  }, []);
-
   return (
     <>
       <Head>
@@ -475,57 +439,6 @@ npx tsx scripts/test-intelligent-crawl.ts`}</pre>
               <pre className="mt-2 rounded-lg bg-slate-900 p-3 text-xs text-slate-100">{`npx tsx scripts/runCrawl.ts --company=vector`}</pre>
             </div>
           </div>
-        </section>
-
-        <section className="mt-8 rounded-3xl border border-slate-200 bg-slate-50 p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-ink">API 状态监控</h2>
-            <button
-              onClick={() => fetchApiStatus()}
-              disabled={loading}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? "检查中..." : "刷新状态"}
-            </button>
-          </div>
-          <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {apiStatus.map((api) => (
-              <div key={api.name} className={`rounded-2xl border p-4 ${
-                api.status === "active" ? "border-emerald-200 bg-emerald-50" :
-                api.status === "unauthorized" ? "border-red-200 bg-red-50" :
-                api.status === "error" ? "border-amber-200 bg-amber-50" :
-                "border-slate-200 bg-white"
-              }`}>
-                <div className="flex items-center gap-2">
-                  <span className={`size-2.5 rounded-full ${
-                    api.status === "active" ? "bg-emerald-500" :
-                    api.status === "unauthorized" ? "bg-red-500" :
-                    api.status === "error" ? "bg-amber-500" :
-                    "bg-slate-400"
-                  }`} />
-                  <span className="font-semibold text-ink">{api.name}</span>
-                </div>
-                <p className="mt-2 text-xs text-slate-600 font-mono">{api.key}</p>
-                <p className="mt-1 text-xs">
-                  <span className={
-                    api.status === "active" ? "text-emerald-700" :
-                    api.status === "unauthorized" ? "text-red-700" :
-                    api.status === "error" ? "text-amber-700" :
-                    "text-slate-600"
-                  }>{api.message}</span>
-                </p>
-                {api.quota?.message && (
-                  <p className="mt-1 text-xs text-slate-500">{api.quota.message}</p>
-                )}
-              </div>
-            ))}
-          </div>
-          {error && (
-            <p className="mt-3 text-sm text-red-600">加载失败: {error}</p>
-          )}
-          {lastChecked && (
-            <p className="mt-3 text-xs text-slate-500">最后检查: {lastChecked}</p>
-          )}
         </section>
       </main>
     </>
