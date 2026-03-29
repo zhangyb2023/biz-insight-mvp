@@ -279,6 +279,20 @@ npm run verify:source-quality
 
 ## 变更记录 (Changelog)
 
+### 2026-03-29
+
+| 增强内容 | 说明 |
+|---------|------|
+| 增强 overview 页面 LLM 透明度 | 新增"LLM 分类阶段详解"章节，展示 Stage 1 分类 prompt（lib/crawl/llmClassifier.ts） |
+| 新增"LLM 调试指南"章节 | 提供常见问题与解决方案、Prompt 优化检查清单、调试方法 |
+| 展示完整 System Prompt | 在 overview 页面展示聚合洞察使用的完整 System Prompt（pages/api/insights/generate-brief.ts） |
+| 展示报告阶段 Prompt | 展示商业洞察报告（report.ts）和 Markdown 报告的 prompt 设计 |
+| Prompt 设计解析 | 说明每个 prompt 部分的作用，以及如果不写会怎样 |
+
+### 增强文件
+
+- `pages/overview.tsx` - 新增 LLM 分类详解、LLM 调试指南章节
+
 ### 2026-03-27
 
 | 修复内容 | 说明 |
