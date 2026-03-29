@@ -49,12 +49,21 @@ const INSIGHT_WORKFLOW = [
     ]
   },
   {
+    phase: "LLM 分类",
+    icon: "🏷️",
+    steps: [
+      { title: "DeepSeek 分类", desc: "判断每条新闻属于哪个类别" },
+      { title: "5大分类", desc: "产品技术/生态合作/战略动向/政策法规/人才动态" },
+      { title: "降噪过滤", desc: "过滤低质量标题（Policy/Menu/Read more等）" },
+    ]
+  },
+  {
     phase: "LLM 聚合",
     icon: "🤖",
     steps: [
-      { title: "DeepSeek 分析", desc: "基于 Prompt 规则，将61条聚合成结构化判断" },
-      { title: "主题分类", desc: "产品技术/生态合作/战略动向/政策法规/人才动态" },
-      { title: "重要性排序", desc: "按证据强度和置信度排序" },
+      { title: "DeepSeek 分析", desc: "基于 Prompt 规则，将多条聚合成结构化判断" },
+      { title: "生成洞察", desc: "输出 window_summary / top_changes / phua_impacts" },
+      { title: "管理建议", desc: "落到具体部门（产品/平台、市场/售前、生态/合作）" },
     ]
   },
   {
@@ -350,24 +359,138 @@ export default function OverviewPage() {
 
               {/* 第三步：LLM分析 */}
               <div className="border-l-4 border-violet-400 pl-4">
-                <h3 className="text-sm font-semibold text-ink mb-2">🤖 第三步：DeepSeek LLM 分析</h3>
-                <p className="text-xs text-slate-600 mb-2">基于 Prompt 规则，对50条有效信息进行聚合分析：</p>
-                <div className="grid md:grid-cols-2 gap-3">
-                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                    <p className="text-xs font-medium text-slate-700 mb-1">主题分类</p>
-                    <p className="text-xs text-slate-500">判断每条属于：产品技术/生态合作/战略动向/政策法规/人才动态</p>
+                <h3 className="text-sm font-semibold text-ink mb-2">🤖 第三步：DeepSeek LLM 分析（生成聚合洞察）</h3>
+                <p className="text-xs text-slate-600 mb-3">这是最核心的一步！LLM 基于"提示词"对50条有效信息进行聚合商业判断，生成结构化洞察报告。</p>
+
+                {/* 提示词明文展示 */}
+                <div className="space-y-4">
+                  <div className="rounded-lg bg-slate-900 text-slate-100 p-4 font-mono text-xs overflow-x-auto">
+                    <p className="text-emerald-400 mb-2">【System Prompt - 系统提示词】</p>
+                    <pre className="whitespace-pre-wrap">{`你是汽车电子基础软件行业的高级商业洞察分析助手，服务对象是普华基础软件有限公司的管理层、业务部门、产品部门、生态合作部门和信息化部门。
+
+你将收到一批时间窗内的动态信息条目。你的任务不是逐条复述，而是做聚合商业判断。
+
+【输出格式强制要求】
+1. 只输出合法JSON，不输出任何其他内容
+2. 不输出 markdown 代码块
+3. 不输出任何解释性文字
+4. 不输出引言、总结或前后文
+5. 每个字符串字段不超过200字符
+6. top_changes 不超过5条
+7. company_insights 不超过5条
+8. management_actions 不超过5条
+
+【核心原则】
+1. 只基于输入证据，不编造
+2. 不说空话套话，如"行业持续发展、竞争日趋激烈"
+3. 如果证据不足或样本集中，要明确说明结论的边界
+4. 结论措辞要适度：多用"建议优先评估、建议重点验证"
+
+【重点关注】
+- 产品技术：新产品/方案发布、技术突破、量产进展
+- 生态合作：战略合作、标准推进、生态绑定
+- 市场动作：客户拓展、融资、产能变化
+- 组织变化：关键人才、战略调整
+
+【对普华影响分类】
+- 竞争压力：威胁普华市场地位的动作
+- 合作机会：可借鉴或可参与的机会
+- 产品/市场参考：产品策略、市场定位参考
+
+【管理动作要求】
+- management_actions 要落到具体部门（产品/平台、市场/售前、生态/合作）
+- 每条建议要包含：哪个部门做什么，为什么
+
+【结论边界要求】
+- 如果只有单条证据就说"趋势"，明确说明"样本有限，单条证据仅供参考"
+- 如果行业分布集中（如某公司占80%），要说明"本期洞察主要由某公司驱动，结论不代表行业整体"
+- 对普华影响要有具体指向，不要泛泛写"值得关注"而是写"建议XX部门关注XX"`}</pre>
                   </div>
-                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                    <p className="text-xs font-medium text-slate-700 mb-1">重要性排序</p>
-                    <p className="text-xs text-slate-500">按证据强度（completeness_score）和置信度排序</p>
+
+                  {/* 提示词作用分解 */}
+                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                    <p className="text-sm font-semibold text-amber-800 mb-3">📌 提示词各部分的作用</p>
+                    <div className="space-y-2 text-xs">
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="font-medium text-slate-700">提示词部分</div>
+                        <div className="font-medium text-slate-700">作用</div>
+                        <div className="font-medium text-slate-700">如果不写会怎样</div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
+                        <div className="text-slate-600">"不逐条复述，而是聚合商业判断"</div>
+                        <div className="text-slate-600">防止 LLM 做"复读机"</div>
+                        <div className="text-slate-600">报告变成新闻列表，没有分析</div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
+                        <div className="text-slate-600">"不说空话套话"</div>
+                        <div className="text-slate-600">防止废话输出</div>
+                        <div className="text-slate-600">"行业持续发展"这种无用句子</div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
+                        <div className="text-slate-600">"证据不足说明边界"</div>
+                        <div className="text-slate-600">防止过度推断</div>
+                        <div className="text-slate-600">单条证据被说成"行业趋势"</div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
+                        <div className="text-slate-600">"落到具体部门"</div>
+                        <div className="text-slate-600">报告可执行</div>
+                        <div className="text-slate-600">"建议关注"不知道谁来做</div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
+                        <div className="text-slate-600">"竞争压力/合作机会分类"</div>
+                        <div className="text-slate-600">分析有普华视角</div>
+                        <div className="text-slate-600">泛泛而谈，没有针对性</div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                    <p className="text-xs font-medium text-slate-700 mb-1">聚合判断</p>
-                    <p className="text-xs text-slate-500">将同主题、同公司、相关事件的信息聚合</p>
+
+                  {/* 质量保证机制 */}
+                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <p className="text-sm font-semibold text-emerald-800 mb-2">📊 置信率保证机制</p>
+                    <div className="grid md:grid-cols-2 gap-3 text-xs text-emerald-700">
+                      <div className="flex items-start gap-2">
+                        <span className="font-bold">1.</span>
+                        <span><strong>证据数量限制</strong>：top_changes 不超过5条，每条都是精选的</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-bold">2.</span>
+                        <span><strong>单条证据边界</strong>：要说明"样本有限"，不会以偏概全</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-bold">3.</span>
+                        <span><strong>分布集中说明</strong>：某公司占80%要说明"主要由某公司驱动"</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-bold">4.</span>
+                        <span><strong>措辞边界</strong>：多用"建议优先"，不用"必须立即否则"</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
-                    <p className="text-xs font-medium text-slate-700 mb-1">结论边界</p>
-                    <p className="text-xs text-slate-500">单条证据说明"样本有限"，集中说明"主要由某公司驱动"</p>
+
+                  {/* 输入输出例子 */}
+                  <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                    <p className="text-sm font-semibold text-slate-700 mb-2">📝 输入→输出例子</p>
+                    <div className="space-y-2 text-xs">
+                      <div>
+                        <p className="font-medium text-slate-600 mb-1">输入数据（3条新闻）：</p>
+                        <div className="bg-slate-100 p-2 rounded text-slate-600 font-mono">
+                          1. 经纬恒润发布ZCU技术白皮书 | 2026-03-27<br/>
+                          2. 丰田与电装合资推进车载SoC研发 | 2026-03-25<br/>
+                          3. 法雷奥投资2.25亿美元在美国建厂 | 2026-03-20
+                        </div>
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-600 mb-1">LLM 输出的洞察：</p>
+                        <div className="bg-slate-100 p-2 rounded text-slate-600 font-mono">
+                          top_changes[0] = &#123;<br/>
+                          &nbsp;&nbsp;title: "经纬恒润发布ZCU白皮书",<br/>
+                          &nbsp;&nbsp;judgement: "新产品发布，在区域控制器领域与普华形成竞争",<br/>
+                          &nbsp;&nbsp;to_phua_impact: "竞争压力",<br/>
+                          &nbsp;&nbsp;recommended_action: "建议产品部门验证Autosar方案与ZCU兼容性"<br/>
+                          &#125;
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -457,6 +580,128 @@ export default function OverviewPage() {
             </div>
           </section>
 
+          {/* LLM 分类阶段详解 */}
+          <section>
+            <h2 className="text-lg font-semibold text-ink mb-4">LLM 分类阶段详解（Stage 1）</h2>
+            <div className="rounded-2xl bg-white border border-slate-200 p-6 space-y-6">
+              <div className="p-4 rounded-lg bg-violet-50 border border-violet-200">
+                <p className="text-sm text-violet-800">
+                  <span className="font-semibold">为什么需要分类？</span>
+                  原始新闻来自12家公司，主题杂乱。分类可以帮助：1) 过滤噪音（如政策页面）；2) 按主题筛选查看；3) 为后续聚合阶段提供结构化输入。
+                </p>
+              </div>
+
+              <div className="border-l-4 border-violet-400 pl-4">
+                <h3 className="text-sm font-semibold text-ink mb-2">🏷️ 分类 Prompt 明文</h3>
+                <div className="bg-slate-900 text-slate-100 p-4 rounded font-mono text-xs overflow-x-auto">
+                  <pre className="whitespace-pre-wrap">{`你是一个专业的汽车行业商业新闻分类助手。请分析以下新闻，判断每个属于哪个分类。
+
+分类标准（必须严格选择其一）：
+- 产品技术：新品发布、产品获奖、技术突破、研发进展、专利算法、系统升级
+- 生态合作：战略合作、联盟签约、生态伙伴奖、标准参与、并购整合
+- 战略动向：融资动态、财报业绩、产能扩张、高管变动、上市、投资
+- 政策法规：政府政策、行业标准、监管动态、合规要求、认证
+- 人才动态：招聘需求、人才趋势、技能要求、社招、校招
+
+返回JSON格式（只返回JSON，不要其他内容）：
+{"items":[{"id":"1","category":"分类名称","reason":"简短分类理由"},...]}`}</pre>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                <p className="text-sm font-semibold text-amber-800 mb-3">📌 分类 Prompt 设计解析</p>
+                <div className="space-y-3 text-xs text-amber-700">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="font-medium text-slate-700">Prompt 部分</div>
+                    <div className="font-medium text-slate-700">作用</div>
+                    <div className="font-medium text-slate-700">如果不写会怎样</div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
+                    <div className="text-slate-600">"必须严格选择其一"</div>
+                    <div className="text-slate-600">防止模糊分类</div>
+                    <div className="text-slate-600">新闻被归为多个类别或"其他"</div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
+                    <div className="text-slate-600">5大分类明确界定</div>
+                    <div className="text-slate-600">标准统一可执行</div>
+                    <div className="text-slate-600">不同人/次分类结果不一致</div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
+                    <div className="text-slate-600">返回 JSON 格式</div>
+                    <div className="text-slate-600">便于程序解析</div>
+                    <div className="text-slate-600">需要额外解析步骤</div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 border-t border-amber-200 pt-2">
+                    <div className="text-slate-600">包含 reason 理由</div>
+                    <div className="text-slate-600">可追溯分类逻辑</div>
+                    <div className="text-slate-600">无法调试错误分类</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
+                <p className="text-sm font-semibold text-emerald-800 mb-2">📊 分类类别说明</p>
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                  <div className="p-2 rounded bg-emerald-100/50">
+                    <span className="font-semibold text-emerald-700">产品技术</span>
+                    <p className="text-emerald-600 mt-1">新品发布、获奖、技术突破、研发进展、专利、系统升级</p>
+                  </div>
+                  <div className="p-2 rounded bg-blue-100/50">
+                    <span className="font-semibold text-blue-700">生态合作</span>
+                    <p className="text-blue-600 mt-1">战略合作、联盟签约、生态伙伴奖、标准参与、并购整合</p>
+                  </div>
+                  <div className="p-2 rounded bg-amber-100/50">
+                    <span className="font-semibold text-amber-700">战略动向</span>
+                    <p className="text-amber-600 mt-1">融资、财报、产能扩张、高管变动、上市、投资</p>
+                  </div>
+                  <div className="p-2 rounded bg-violet-100/50">
+                    <span className="font-semibold text-violet-700">政策法规</span>
+                    <p className="text-violet-600 mt-1">政府政策、行业标准、监管动态、合规要求、认证</p>
+                  </div>
+                  <div className="p-2 rounded bg-rose-100/50">
+                    <span className="font-semibold text-rose-700">人才动态</span>
+                    <p className="text-rose-600 mt-1">招聘需求、人才趋势、技能要求、社招、校招</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                <p className="text-sm font-semibold text-slate-700 mb-2">📝 输入→输出例子</p>
+                <div className="space-y-2 text-xs">
+                  <div>
+                    <p className="font-medium text-slate-600 mb-1">输入数据（3条原始新闻）：</p>
+                    <div className="bg-slate-100 p-2 rounded text-slate-600 font-mono">
+                      1. 华为发布乾崑智能驾驶解决方案 V2.0<br/>
+                      2. 普华基础软件与中科创达签署战略合作协议<br/>
+                      3. 经纬恒润招聘高级嵌入式软件工程师
+                    </div>
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-600 mb-1">LLM 返回的 JSON：</p>
+                    <div className="bg-slate-100 p-2 rounded text-slate-600 font-mono">
+                      &#123;"items":[<br/>
+                      &nbsp;&nbsp;&#123;"id":"1","category":"产品技术","reason":"智能驾驶解决方案发布属于产品技术类"&#125;,<br/>
+                      &nbsp;&nbsp;&#123;"id":"2","category":"生态合作","reason":"战略合作协议属于生态合作类"&#125;,<br/>
+                      &nbsp;&nbsp;&#123;"id":"3","category":"人才动态","reason":"招聘需求属于人才动态类"&#125;<br/>
+                      ]&#125;
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-red-50 border border-red-200">
+                <p className="text-sm font-semibold text-red-800 mb-2">⚠️ 分类失败降级机制</p>
+                <p className="text-xs text-red-700">
+                  如果 DeepSeek API 调用失败（如网络错误、超时），系统不会中断，而是降级到 <code className="bg-red-100 px-1 rounded">guessCategory()</code> 函数，
+                  基于规则（关键词匹配）进行分类。例如：标题含"招聘"→人才动态，含"融资"→战略动向。
+                </p>
+                <p className="text-xs text-red-600 mt-2">
+                  分类阶段失败不影响整体流程，但分类准确性会下降。
+                </p>
+              </div>
+            </div>
+          </section>
+
           {/* 三大洞察输出详解 */}
           <section>
             <h2 className="text-lg font-semibold text-ink mb-4">三大洞察输出详解</h2>
@@ -528,12 +773,61 @@ export default function OverviewPage() {
                   </div>
 
                   <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
-                    <p className="text-xs font-medium text-slate-500 mb-2">核心 Prompt 逻辑</p>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      将多条原始新闻聚合成结构化判断，不逐条复述新闻，而是提取商业意义。<br/>
-                      结论边界：单条证据说明"样本有限"，分布集中说明"主要由某公司驱动"。<br/>
-                      措辞要求：多用"建议优先评估/建议重点验证"，不用"必须/立即/否则"。
-                    </p>
+                    <p className="text-xs font-medium text-slate-500 mb-3">⭐ 核心 Prompt 明文（System Prompt）</p>
+                    <div className="bg-slate-900 text-slate-100 p-3 rounded font-mono text-xs overflow-x-auto max-h-64">
+                      <pre className="whitespace-pre-wrap">{`你是汽车电子基础软件行业的高级商业洞察分析助手，服务对象是普华基础软件有限公司的管理层、业务部门、产品部门、生态合作部门和信息化部门。
+
+你将收到一批时间窗内的动态信息条目。你的任务不是逐条复述，而是做聚合商业判断。
+
+【输出格式强制要求】
+1. 只输出合法JSON，不输出任何其他内容
+2. 不输出 markdown 代码块
+3. 不输出任何解释性文字
+4. 不输出引言、总结或前后文
+5. 每个字符串字段不超过200字符
+
+【核心原则】
+1. 只基于输入证据，不编造
+2. 不说空话套话，如"行业持续发展、竞争日趋激烈"
+3. 如果证据不足或样本集中，要明确说明结论的边界
+4. 结论措辞要适度：多用"建议优先评估、建议重点验证"
+
+【对普华影响分类】
+- 竞争压力：威胁普华市场地位的动作
+- 合作机会：可借鉴或可参与的机会
+- 产品/市场参考：产品策略、市场定位参考
+
+【管理动作要求】
+- management_actions 要落到具体部门（产品/平台、市场/售前、生态/合作）
+- 每条建议要包含：哪个部门做什么，为什么
+
+【结论边界要求】
+- 如果只有单条证据就说"趋势"，明确说明"样本有限，单条证据仅供参考"
+- 如果行业分布集中（如某公司占80%），要说明"本期洞察主要由某公司驱动"
+- 对普华影响要有具体指向，不要泛泛写"值得关注"而是写"建议XX部门关注XX"`}</pre>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                    <p className="text-sm font-semibold text-amber-800 mb-2">📌 提示词关键设计说明</p>
+                    <div className="space-y-2 text-xs text-amber-700">
+                      <div className="flex items-start gap-2">
+                        <span className="font-bold">"不逐条复述"</span>
+                        <span>→ 防止 LLM 做复读机，要求做商业判断</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-bold">"不说空话套话"</span>
+                        <span>→ 防止"行业持续发展"这种废话</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-bold">"落到具体部门"</span>
+                        <span>→ 报告可执行，不是"建议关注"这种空话</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-bold">"说明结论边界"</span>
+                        <span>→ 单条证据不夸大，样本集中要说明</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -595,12 +889,47 @@ export default function OverviewPage() {
                   </div>
 
                   <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
-                    <p className="text-xs font-medium text-slate-500 mb-2">核心 Prompt 逻辑</p>
-                    <p className="text-xs text-slate-600 leading-relaxed">
-                      直接基于原始新闻生成报告，不是基于聚合洞察再加工。<br/>
-                      每条结论都要有具体依据，具体到公司名、产品名、合作事件名。<br/>
-                      单公司报告：重点写该公司，其他公司只作为对标/合作对象提及。
-                    </p>
+                    <p className="text-xs font-medium text-slate-500 mb-3">⭐ 核心 Prompt 明文</p>
+                    <div className="bg-slate-900 text-slate-100 p-3 rounded font-mono text-xs overflow-x-auto max-h-48">
+                      <pre className="whitespace-pre-wrap">{`直接基于原始新闻生成报告，不是基于聚合洞察再加工。
+
+【简版报告要求】
+- top_changes 只保留最重要的3条，每条包含公司名、产品名、事件名
+- management_actions 只保留3条
+- 结论要有具体依据，不泛泛而谈
+
+【管理层报告要求】
+- top_changes 保留5条，内容更详细，增加背景和分析深度
+- management_actions 保留5条
+- 适合管理层汇报，每条结论要有支撑数据或事件
+
+【单公司报告要求】
+- 重点写该公司，其他公司只作为对标/合作对象提及
+- 先写该公司近30天最重要动作，再写对普华的具体影响
+
+【结论要求】
+- 每条结论都要有具体依据：具体到公司名、产品名、合作事件名
+- 如果证据不足，明确写"当前公开信息有限，建议继续跟踪"
+- 不用"必须/立即/否则"，多用"建议优先/建议重点/若趋势延续则可能"`}</pre>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <p className="text-sm font-semibold text-emerald-800 mb-2">📌 与聚合洞察的本质区别</p>
+                    <div className="space-y-2 text-xs text-emerald-700">
+                      <div className="flex items-start gap-2">
+                        <span className="font-bold">1.</span>
+                        <span><strong>数据来源不同</strong>：聚合洞察用已聚合并排序的数据，商业洞察报告直接用原始新闻</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-bold">2.</span>
+                        <span><strong>详细程度不同</strong>：商业洞察报告要求具体到公司名、产品名、事件名</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-bold">3.</span>
+                        <span><strong>用途不同</strong>：聚合洞察是页面展示，商业洞察报告是可下载的 Markdown</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -736,6 +1065,113 @@ export default function OverviewPage() {
                 <p className="text-xs text-slate-500">
                   过滤函数位于 <code className="bg-slate-200 px-1 rounded">pages/insights.tsx</code>，
                   同时下沉到 <code className="bg-slate-200 px-1 rounded">generate-brief.ts</code> 和 <code className="bg-slate-200 px-1 rounded">generate-report.ts</code>
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* LLM 调试指南 */}
+          <section>
+            <h2 className="text-lg font-semibold text-ink mb-4">LLM 调试指南</h2>
+            <div className="rounded-2xl bg-white border border-slate-200 p-6 space-y-6">
+              <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                <p className="text-sm text-amber-800">
+                  <span className="font-semibold">什么时候需要调试 LLM 输出？</span>
+                  当洞察报告出现：1) 结论空洞（"行业持续发展"）；2) 分类错误；3) 遗漏重要信息；4) 结论过度推断时，需要检查 Prompt 设计。
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-ink mb-3">🔍 常见问题与解决方案</h3>
+                <div className="space-y-3">
+                  <div className="p-4 rounded-lg border border-slate-200">
+                    <p className="text-xs font-medium text-red-600 mb-1">问题：报告出现"行业持续发展、竞争日趋激烈"等废话</p>
+                    <p className="text-xs text-slate-600 mb-1"><span className="font-semibold">原因：</span>Prompt 没有明确禁止空话套话</p>
+                    <p className="text-xs text-slate-600"><span className="font-semibold">解决：</span>在核心原则中添加"不说空话套话，如'行业持续发展、竞争日趋激烈'"</p>
+                  </div>
+                  <div className="p-4 rounded-lg border border-slate-200">
+                    <p className="text-xs font-medium text-red-600 mb-1">问题：单条证据被夸大成"行业趋势"</p>
+                    <p className="text-xs text-slate-600 mb-1"><span className="font-semibold">原因：</span>Prompt 没有要求说明结论边界</p>
+                    <p className="text-xs text-slate-600"><span className="font-semibold">解决：</span>添加"如果只有单条证据就说'趋势'，明确说明'样本有限，单条证据仅供参考'"</p>
+                  </div>
+                  <div className="p-4 rounded-lg border border-slate-200">
+                    <p className="text-xs font-medium text-red-600 mb-1">问题：管理建议写成"建议关注XX"（不知道谁来做）</p>
+                    <p className="text-xs text-slate-600 mb-1"><span className="font-semibold">原因：</span>Prompt 没有要求落到具体部门</p>
+                    <p className="text-xs text-slate-600"><span className="font-semibold">解决：</span>添加"management_actions 要落到具体部门（产品/平台、市场/售前、生态/合作），每条建议要包含：哪个部门做什么，为什么"</p>
+                  </div>
+                  <div className="p-4 rounded-lg border border-slate-200">
+                    <p className="text-xs font-medium text-red-600 mb-1">问题：分类结果不准确（如合作新闻被归为产品技术）</p>
+                    <p className="text-xs text-slate-600 mb-1"><span className="font-semibold">原因：</span>分类标准定义不够清晰或重叠</p>
+                    <p className="text-xs text-slate-600"><span className="font-semibold">解决：</span>在分类 prompt 中明确各类别的边界关键词，如"战略合作"是生态合作，"技术突破"是产品技术</p>
+                  </div>
+                  <div className="p-4 rounded-lg border border-slate-200">
+                    <p className="text-xs font-medium text-red-600 mb-1">问题：报告结论过于模糊（"值得关注"）</p>
+                    <p className="text-xs text-slate-600 mb-1"><span className="font-semibold">原因：</span>Prompt 没有要求具体影响分析</p>
+                    <p className="text-xs text-slate-600"><span className="font-semibold">解决：</span>添加"对普华影响要有具体指向，不要泛泛写'值得关注'而是写'建议XX部门关注XX'"</p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-ink mb-3">📐 Prompt 优化检查清单</h3>
+                <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                  <div className="space-y-2 text-xs text-slate-600">
+                    <div className="flex items-start gap-2">
+                      <span className="text-emerald-500 font-bold">✓</span>
+                      <span>明确禁止项：如"不说空话套话"、"不逐条复述"、"不输出 markdown"</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-emerald-500 font-bold">✓</span>
+                      <span>输出格式约束：JSON 结构、字段数量限制（如 top_changes 不超过5条）</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-emerald-500 font-bold">✓</span>
+                      <span>结论边界要求：证据不足时说明、单条证据不夸大、样本集中要说明</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-emerald-500 font-bold">✓</span>
+                      <span>具体性要求：落到公司名、产品名、事件名、具体部门</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-emerald-500 font-bold">✓</span>
+                      <span>措辞边界：多用"建议优先"，不用"必须立即否则"</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-emerald-500 font-bold">✓</span>
+                      <span>降级机制：API 失败时的 fallback 策略</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-ink mb-3">🧪 调试方法</h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-lg bg-violet-50 border border-violet-100">
+                    <p className="text-xs font-semibold text-violet-700 mb-2">1. 直接测试 API</p>
+                    <p className="text-xs text-violet-600">使用 curl 直接调用 DeepSeek API，传入设计的 Prompt 和样本数据，检查输出是否符合理想</p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-100">
+                    <p className="text-xs font-semibold text-emerald-700 mb-2">2. 控制变量测试</p>
+                    <p className="text-xs text-emerald-600">保持其他条件不变，只修改 Prompt 某一部分，对比输出差异</p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-100">
+                    <p className="text-xs font-semibold text-amber-700 mb-2">3. 边界条件测试</p>
+                    <p className="text-xs text-amber-600">用单条证据、空白数据、异常数据测试，观察 Prompt 的约束是否有效</p>
+                  </div>
+                  <div className="p-4 rounded-lg bg-sky-50 border border-sky-100">
+                    <p className="text-xs font-semibold text-sky-700 mb-2">4. 温度参数调优</p>
+                    <p className="text-xs text-sky-600">当前使用 temperature=0.3（低随机性），如果需要更创造性输出可提高到 0.5-0.7</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-lg bg-slate-100 border border-slate-200">
+                <p className="text-xs text-slate-500">
+                  <span className="font-semibold">Prompt 文件位置：</span>
+                  <code className="bg-slate-200 px-1 rounded">lib/crawl/llmClassifier.ts</code>（分类阶段）|
+                  <code className="bg-slate-200 px-1 rounded">pages/api/insights/generate-brief.ts</code>（聚合阶段）|
+                  <code className="bg-slate-200 px-1 rounded">pages/api/insights/report.ts</code>（报告阶段）
                 </p>
               </div>
             </div>
