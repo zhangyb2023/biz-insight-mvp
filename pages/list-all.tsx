@@ -486,8 +486,8 @@ export default function ListAllPage() {
                     )}
                     {item.completeness_score !== null && (
                       <span className={`text-xs ${
-                        item.completeness_score >= 0.75 ? "text-green-600" :
-                        item.completeness_score >= 0.5 ? "text-yellow-600" :
+                        item.completeness_score >= 0.60 ? "text-green-600" :
+                        item.completeness_score >= 0.50 ? "text-yellow-600" :
                         "text-red-600"
                       }`}>
                         {Math.round(item.completeness_score * 100)}%

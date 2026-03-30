@@ -220,8 +220,8 @@ function getImpactLevel(score: number | null): ImpactLevel {
 
 function getConfidenceLevel(score: number | null): ConfidenceLevel {
   if (!score) return "中";
-  if (score >= 0.75) return "高";
-  if (score >= 0.5) return "中";
+  if (score >= 0.60) return "高";
+  if (score >= 0.50) return "中";
   return "低";
 }
 
@@ -979,7 +979,7 @@ export default function InsightsPage() {
   }, [filteredByTime]);
 
   const highValueCount = useMemo(() =>
-    filteredItems.filter(i => (i.completeness_score || 0) >= 0.75).length
+    filteredItems.filter(i => (i.insight_confidence ?? i.completeness_score ?? 0) >= 0.60).length
   , [filteredItems]);
 
   const sourceDistribution = useMemo(() => {
@@ -1552,7 +1552,7 @@ export default function InsightsPage() {
                 <InfoTooltip text={METRIC_DEFINITIONS.highConfidence} />
               </p>
               <p className="mt-1 text-3xl font-bold">{highValueCount}</p>
-              <p className="text-xs opacity-70 mt-1">条 (≥75%)</p>
+              <p className="text-xs opacity-70 mt-1">条 (≥60%)</p>
             </div>
             <div className="rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 p-5 text-white">
               <p className="text-xs opacity-80 flex items-center">
