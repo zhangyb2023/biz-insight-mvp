@@ -137,10 +137,10 @@ function inferPageSection(item: ConsumptionItem) {
   if (item.source_type === "company_newsroom") {
     return "新闻/动态";
   }
-  if (item.display_category === "生态") {
+  if (item.display_category === "生态合作") {
     return "生态/合作";
   }
-  if (item.display_category === "技术") {
+  if (item.display_category === "产品技术") {
     return "技术/标准";
   }
   return item.display_category || "其他";
@@ -156,7 +156,7 @@ function inferEventType(item: ConsumptionItem) {
   if (item.source_type === "company_product_page") {
     return "产品能力变化";
   }
-  if (item.display_category === "生态") {
+  if (item.display_category === "生态合作") {
     return "生态合作动态";
   }
   return "行业动态";
@@ -266,12 +266,12 @@ function inferReferenceValue(item: ConsumptionItem) {
     return "可用于判断近期市场动作、合作关系与客户推进方向。";
   }
   if (item.source_type === "company_product_page") {
-    return "可直接用于产品路线与能力对标。";
+    return "适合用于产品路线与能力对标。";
   }
-  if (item.display_category === "生态") {
+  if (item.display_category === "生态合作") {
     return "可用于判断合作关系与生态卡位变化。";
   }
-  if (item.display_category === "技术") {
+  if (item.display_category === "产品技术") {
     return "可用于判断技术路线和平台门槛变化。";
   }
   return "可作为业务判断的辅助证据。";
@@ -284,7 +284,7 @@ function inferJudgment(item: ConsumptionItem) {
   if (item.source_type === "company_product_page") {
     return "该条目更像明确产品/方案信号，具备直接观察价值。";
   }
-  if (item.display_category === "生态") {
+  if (item.display_category === "生态合作") {
     return "该条目反映生态关系变化，值得跟踪合作与绑定方向。";
   }
   if (item.source_type === "company_newsroom") {
@@ -300,10 +300,10 @@ function inferImplication(item: ConsumptionItem) {
   if (item.source_type === "company_product_page") {
     return "建议优先用于产品竞争对标，识别普华能力补齐或差异化空间。";
   }
-  if (item.display_category === "生态") {
+  if (item.display_category === "生态合作") {
     return "建议关注合作对象变化对普华生态位置和进入路径的影响。";
   }
-  if (item.display_category === "技术") {
+  if (item.display_category === "产品技术") {
     return "建议结合技术路线变化，判断普华中长期投入优先级。";
   }
   return "建议作为专题观察输入，而不是单独形成管理层结论。";

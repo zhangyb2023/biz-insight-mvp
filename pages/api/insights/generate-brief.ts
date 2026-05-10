@@ -1,6 +1,7 @@
 import type { NextApiHandler } from "next";
 import fs from "fs";
-import { getAllInsightItems } from "@/lib/db/repository";
+import path from "path";
+import { listConsumptionItems } from "@/lib/db/repository";
 
 const API_KEY_REGEX = /DEEPSEEK_API_KEY="([^"]+)"/;
 
@@ -38,6 +39,7 @@ type BriefInput = {
   window_days?: number;
   company_ids?: string[];
   limit?: number;
+  refresh?: boolean;
 };
 
 type CompactItem = {
@@ -129,6 +131,41 @@ type BriefResult = {
   phua_impacts: PhuaImpacts;
   management_actions: ManagementAction[];
 };
+
+type BriefCacheEntry = {
+  key: string;
+  generated_at: string;
+  meta: Record<string, unknown>;
+  empty: boolean;
+  result: BriefResult;
+};
+
+const briefCacheFile = path.join(process.cwd(), "data", "brief-cache.json");
+
+function buildCacheKey(input: { windowDays: number; companyIds?: string[]; limit: number }) {
+  const companies = [...(input.companyIds || [])].sort().join(",");
+  return JSON.stringify({
+    date_policy: "published-date-only-v2",
+    window_days: input.windowDays,
+    company_ids: companies,
+    limit: input.limit
+  });
+}
+
+function readBriefCache(): Record<string, BriefCacheEntry> {
+  try {
+    return JSON.parse(fs.readFileSync(briefCacheFile, "utf8")) as Record<string, BriefCacheEntry>;
+  } catch {
+    return {};
+  }
+}
+
+function writeBriefCache(entry: BriefCacheEntry) {
+  const cache = readBriefCache();
+  cache[entry.key] = entry;
+  fs.mkdirSync(path.dirname(briefCacheFile), { recursive: true });
+  fs.writeFileSync(briefCacheFile, `${JSON.stringify(cache, null, 2)}\n`, "utf8");
+}
 
 const SYSTEM_PROMPT = `你是汽车电子基础软件行业的高级商业洞察分析助手，服务对象是普华基础软件有限公司的管理层、业务部门、产品部门、生态合作部门和信息化部门。
 
@@ -242,7 +279,7 @@ function parseDate(dateStr: string): string | null {
   return dateStr;
 }
 
-type ConfidenceBreakdown = {
+type EvidenceSupportBreakdown = {
   base: number;
   evidence_score: number;
   diversity_company_score: number;
@@ -331,17 +368,17 @@ function cosineSimilarity(a: number[], b: number[]): number {
 
 const SIMILARITY_THRESHOLD = 0.55;
 
-async function calculateScientificConfidence(
+async function calculateEvidenceSupport(
   topChange: TopChange,
   items: CompactItem[],
   apiKey: string | null
-): Promise<{ confidence: number; breakdown: ConfidenceBreakdown; embedding_used: boolean }> {
+): Promise<{ score: number; breakdown: EvidenceSupportBreakdown; embedding_used: boolean }> {
   const topChangeText = `${topChange.title} ${topChange.judgement} ${topChange.affected_companies.join(" ")} ${topChange.related_topics.join(" ")}`;
 
   const keywords = extractKeywords(topChangeText);
   if (keywords.length === 0) {
     return {
-      confidence: 0.30,
+      score: 0.30,
       breakdown: { base: 0.30, evidence_score: 0, diversity_company_score: 0, diversity_media_score: 0, recency_score: 0, final: 0.30 },
       embedding_used: false
     };
@@ -365,7 +402,7 @@ async function calculateScientificConfidence(
     const topChangeEmbedding = await getEmbedding(topChangeText, apiKey);
     if (topChangeEmbedding.length === 0) {
       return {
-        confidence: base,
+        score: base,
         breakdown: { base, evidence_score: 0, diversity_company_score: 0, diversity_media_score: 0, recency_score: 0, final: base },
         embedding_used: false
       };
@@ -421,7 +458,7 @@ async function calculateScientificConfidence(
     const final = Math.min(0.95, base + evidence_score + diversity_company_score + diversity_media_score + recency_score);
 
     return {
-      confidence: final,
+      score: final,
       breakdown: {
         base,
         evidence_score,
@@ -433,7 +470,7 @@ async function calculateScientificConfidence(
       embedding_used: true
     };
   } catch (error) {
-    console.error("Embedding-based confidence calculation failed, falling back:", error);
+    console.error("Embedding-based evidence support calculation failed, falling back:", error);
     const fallbackMatchedItems: CompactItem[] = [];
     for (const item of items) {
       const itemText = `${item.title} ${item.summary} ${item.company}`.toLowerCase();
@@ -446,7 +483,7 @@ async function calculateScientificConfidence(
   }
 }
 
-function calculateFallbackConfidence(matchedItems: CompactItem[], base: number): { confidence: number; breakdown: ConfidenceBreakdown; embedding_used: boolean } {
+function calculateFallbackConfidence(matchedItems: CompactItem[], base: number): { score: number; breakdown: EvidenceSupportBreakdown; embedding_used: boolean } {
   const uniqueUrls = [...new Set(matchedItems.map(i => i.url))];
   const evidenceCount = uniqueUrls.length;
 
@@ -479,7 +516,7 @@ function calculateFallbackConfidence(matchedItems: CompactItem[], base: number):
   const final = Math.min(0.95, base + evidence_score + diversity_company_score + diversity_media_score + recency_score);
 
   return {
-    confidence: final,
+    score: final,
     breakdown: {
       base,
       evidence_score,
@@ -687,6 +724,21 @@ const handler: NextApiHandler = async (req, res) => {
   const windowDays = input.window_days || 7;
   const companyIds = input.company_ids;
   const limit = input.limit || 200;
+  const cacheKey = buildCacheKey({ windowDays, companyIds, limit });
+
+  if (!input.refresh) {
+    const cached = readBriefCache()[cacheKey];
+    if (cached) {
+      return res.status(200).json({
+        ok: true,
+        meta: cached.meta,
+        empty: cached.empty,
+        cached: true,
+        generated_at: cached.generated_at,
+        result: cached.result
+      });
+    }
+  }
 
   if (![7, 30, 90].includes(windowDays)) {
     return res.status(400).json({ ok: false, error: "window_days must be 7, 30, or 90" });
@@ -696,11 +748,11 @@ const handler: NextApiHandler = async (req, res) => {
   cutoffDate.setDate(cutoffDate.getDate() - windowDays);
   const cutoffStr = cutoffDate.toISOString().split("T")[0];
 
-  const allItems = getAllInsightItems();
+  const allItems = listConsumptionItems({ includeInactive: false, limit: Math.max(limit * 3, 500) });
 
   const filteredItems = allItems
     .filter((item) => {
-      const rawDate = item.published_at || item.fetch_date;
+      const rawDate = item.published_at;
       if (!rawDate) return false;
       const itemDate = parseDate(rawDate);
       if (!itemDate) return false;
@@ -718,8 +770,8 @@ const handler: NextApiHandler = async (req, res) => {
     company: item.company_name || "未知",
     title: item.title || "",
     summary: (item.summary || "").substring(0, 200),
-    date: parseDate(item.published_at || item.fetch_date || "") || "",
-    category: item.category || item.insight_type || "战略动向",
+    date: parseDate(item.published_at || "") || "",
+    category: item.display_category || item.category || item.insight_type || "战略动向",
     url: item.url || "",
   }));
 
@@ -750,27 +802,39 @@ const handler: NextApiHandler = async (req, res) => {
   }
 
   if (highQualityCompactItems.length === 0) {
+    const result = {
+      window_summary: {
+        time_window: `${windowDays}天`,
+        overall_judgement: "暂无足够高质量样本",
+        signal_density: "low" as const,
+        manager_note: `共${compactItems.length}条原始数据，但经质量过滤后无可用样本，请检查数据源或扩大时间窗`,
+      },
+      top_changes: [],
+      company_insights: [],
+      phua_impacts: {
+        competition_pressure: [],
+        cooperation_opportunities: [],
+        product_market_reference: [],
+      },
+      management_actions: [],
+    };
+    const generatedAt = new Date().toISOString();
+    writeBriefCache({
+      key: cacheKey,
+      generated_at: generatedAt,
+      meta,
+      empty: true,
+      result
+    });
+
     return res.status(200).json({
       ok: true,
       meta,
       empty: true,
+      cached: false,
+      generated_at: generatedAt,
       reason: "no_high_quality_items",
-      result: {
-        window_summary: {
-          time_window: `${windowDays}天`,
-          overall_judgement: "暂无足够高质量样本",
-          signal_density: "low" as const,
-          manager_note: `共${compactItems.length}条原始数据，但经质量过滤后无可用样本，请检查数据源或扩大时间窗`,
-        },
-        top_changes: [],
-        company_insights: [],
-        phua_impacts: {
-          competition_pressure: [],
-          cooperation_opportunities: [],
-          product_market_reference: [],
-        },
-        management_actions: [],
-      },
+      result,
     });
   }
 
@@ -779,18 +843,29 @@ const handler: NextApiHandler = async (req, res) => {
 
     for (const topChange of result.top_changes) {
       const siliconFlowKey = getSiliconFlowApiKey();
-      const { confidence, breakdown } = await calculateScientificConfidence(topChange, highQualityCompactItems, siliconFlowKey);
-      topChange.scientific_confidence = Math.round(confidence * 100);
+      const { score, breakdown } = await calculateEvidenceSupport(topChange, highQualityCompactItems, siliconFlowKey);
+      topChange.scientific_confidence = Math.round(score * 100);
       topChange.evidence_count = breakdown.evidence_score > 0 ? Math.round(breakdown.evidence_score / 0.10) : topChange.evidence_count;
 
       const evidenceCount = breakdown.evidence_score > 0 ? Math.round(breakdown.evidence_score / 0.10) : 0;
-      console.log(`[Confidence] "${topChange.title}" | base=${breakdown.base} + evidence=${breakdown.evidence_score}(${evidenceCount} URLs) + company_div=${breakdown.diversity_company_score} + media_div=${breakdown.diversity_media_score} + recency=${breakdown.recency_score} = ${breakdown.final} (${Math.round(breakdown.final * 100)}%)`);
+      console.log(`[EvidenceSupport] "${topChange.title}" | base=${breakdown.base} + evidence=${breakdown.evidence_score}(${evidenceCount} URLs) + company_div=${breakdown.diversity_company_score} + media_div=${breakdown.diversity_media_score} + recency=${breakdown.recency_score} = ${breakdown.final} (${Math.round(breakdown.final * 100)}%)`);
     }
+
+    const generatedAt = new Date().toISOString();
+    writeBriefCache({
+      key: cacheKey,
+      generated_at: generatedAt,
+      meta,
+      empty: false,
+      result,
+    });
 
     return res.status(200).json({
       ok: true,
       meta,
       empty: false,
+      cached: false,
+      generated_at: generatedAt,
       result,
     });
   } catch (error) {

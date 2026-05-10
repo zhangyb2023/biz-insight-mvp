@@ -147,7 +147,7 @@ export default function ApiStatusPage() {
                   <span className="text-lg">🔗</span>
                   <span className="font-medium text-slate-700">SiliconFlow</span>
                 </div>
-                <p className="text-xs text-slate-500">向量嵌入模型（BAAI/bge-large-zh-v1.5）。用于置信率计算：判断新闻内容与洞察结论的语义相似度（阈值 0.55），只有相似度≥0.55 的新闻才计入证据。</p>
+                <p className="text-xs text-slate-500">向量嵌入模型（BAAI/bge-large-zh-v1.5）。用于证据支撑率计算：判断新闻内容与洞察结论的语义相似度（阈值 0.55），只有相似度≥0.55 的新闻才计入证据。</p>
               </div>
             </div>
           </div>

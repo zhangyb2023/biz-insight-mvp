@@ -318,6 +318,18 @@ function matchPattern(text: string, patterns: string[]): boolean {
 function classifyByUrlAndTitle(url: string, title: string): SourceType | null {
   const lowerUrl = url.toLowerCase();
   const lowerTitle = title.toLowerCase();
+  const hasProductSignal =
+    matchPattern(lowerUrl, [
+      "/product",
+      "/products",
+      "/solution",
+      "/solutions",
+      "/platform",
+      "/service",
+      "/services",
+      "/product-a-z"
+    ]) ||
+    matchPattern(lowerTitle, ["产品", "方案", "平台", "解决方案", "product", "solution", "platform"]);
 
   if (
     matchPattern(lowerUrl, [".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"])
@@ -339,20 +351,6 @@ function classifyByUrlAndTitle(url: string, title: string): SourceType | null {
 
   if (
     matchPattern(lowerUrl, [
-      "/news",
-      "/press",
-      "/blog",
-      "/dynamic",
-      "/media",
-      "/zx"
-    ]) ||
-    matchPattern(lowerTitle, ["新闻", "动态", "资讯", "press", "blog"])
-  ) {
-    return "company_newsroom";
-  }
-
-  if (
-    matchPattern(lowerUrl, [
       "/case",
       "/cases",
       "/example",
@@ -365,20 +363,22 @@ function classifyByUrlAndTitle(url: string, title: string): SourceType | null {
     return "company_case_study";
   }
 
+  if (hasProductSignal) {
+    return "company_product_page";
+  }
+
   if (
     matchPattern(lowerUrl, [
-      "/product",
-      "/products",
-      "/solution",
-      "/solutions",
-      "/platform",
-      "/service",
-      "/services",
-      "/product-a-z"
+      "/news",
+      "/press",
+      "/blog",
+      "/dynamic",
+      "/media",
+      "/zx"
     ]) ||
-    matchPattern(lowerTitle, ["产品", "方案", "平台", "解决方案", "product", "solution", "platform"])
+    matchPattern(lowerTitle, ["新闻", "动态", "资讯", "press", "blog"])
   ) {
-    return "company_product_page";
+    return "company_newsroom";
   }
 
   if (

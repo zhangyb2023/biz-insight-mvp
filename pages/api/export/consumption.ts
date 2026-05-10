@@ -14,7 +14,7 @@ import { formatShanghaiDateTime } from "@/lib/format";
 import type { ConsumptionCategory } from "@/lib/types";
 
 const EXCEL_CELL_LIMIT = 32000;
-const allowedCategories: ConsumptionCategory[] = ["新闻动态", "产品", "技术", "招聘", "生态"];
+const allowedCategories: ConsumptionCategory[] = ["产品技术", "生态合作", "战略动向", "政策法规", "人才动态"];
 
 function sanitizeCell(value: unknown) {
   if (typeof value !== "string") {

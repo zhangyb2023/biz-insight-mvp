@@ -35,7 +35,7 @@ export default function TracePage({ step }: Props) {
   return (
     <>
       <Head>
-        <title>Trace {step.id} | Biz Insight MVP</title>
+        <title>{`Trace ${step.id} | Biz Insight MVP`}</title>
       </Head>
       <main className="mx-auto max-w-6xl px-6 py-10">
         <div className="flex items-end justify-between gap-4">

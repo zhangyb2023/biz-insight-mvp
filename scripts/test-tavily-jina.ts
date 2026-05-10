@@ -6,7 +6,7 @@
 import https from "https";
 import http from "http";
 
-const TAVILY_KEY = process.env.TAVILY_API_KEY || "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";
+const TAVILY_KEY = process.env.TAVILY_API_KEY || "";
 
 interface TavilyResult {
   title: string;

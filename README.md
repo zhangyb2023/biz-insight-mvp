@@ -201,6 +201,187 @@ npm run verify:source-quality
 - `build` 用于生产构建检查
 - 某些命令在当前仓库状态下可能暴露已知工程问题
 
+## 发布 SOP
+
+当前正式站点运行在 PM2 托管的生产模式下。日常开发和正式发布建议分开进行。
+
+### 1. 开发调试
+
+```bash
+cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
+npm run dev
+```
+
+### 2. 发布前检查
+
+```bash
+cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
+./node_modules/.bin/tsc --noEmit
+npm run build
+```
+
+### 3. 重启正式站点
+
+```bash
+cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
+node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 restart biz-insight
+```
+
+### 4. 发布后验证
+
+```bash
+curl -I http://127.0.0.1:3000
+```
+
+建议至少手动检查以下页面：
+
+- `/`
+- `/workbench`
+- `/insights`
+- `/health`
+
+## 小白操作指南
+
+这部分按最简单的方式说明日常怎么开发、怎么发布、怎么查看状态。
+
+### 先记住两个地址
+
+- `3001`：开发环境。你改代码后，这里会直接看到变化。
+- `3000`：生产环境。正式给别人看的网站，用这个地址。
+
+你维护的是同一套代码，不是两套代码。
+
+### 1. 先看当前状态
+
+查看两个环境是否在运行：
+
+```bash
+cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
+node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 list
+```
+
+查看端口是否在监听：
+
+```bash
+ss -ltnp | grep -E ':3000|:3001' || true
+```
+
+本机检查网页是否能打开：
+
+```bash
+curl -I http://127.0.0.1:3000
+curl -I http://127.0.0.1:3001
+```
+
+### 2. 开发时怎么用
+
+如果开发环境 `3001` 没开，先启动它：
+
+```bash
+cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
+node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 restart biz-insight-dev
+```
+
+然后访问：
+
+- `http://你的服务器IP:3001`
+
+接下来你就可以：
+
+- 改代码
+- 刷新 `3001`
+- 直接看修改后的页面效果
+
+说明：
+
+- 你改代码时，`3001` 会跟着变
+- 这时候 `3000` 不会变，所以正式网站还是稳定的
+
+### 3. 开发完成后，怎么发布到正式环境
+
+当你在 `3001` 看着没问题后，执行下面这套：
+
+1. 进入项目目录
+
+```bash
+cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
+```
+
+2. 先做类型检查
+
+```bash
+./node_modules/.bin/tsc --noEmit
+```
+
+3. 再做生产构建
+
+```bash
+npm run build
+```
+
+4. 重启正式环境
+
+```bash
+node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 restart biz-insight
+```
+
+5. 检查正式环境
+
+```bash
+curl -I http://127.0.0.1:3000
+```
+
+然后访问：
+
+- `http://你的服务器IP:3000`
+
+### 4. 如果你暂时不开发了
+
+可以把开发环境停掉，省资源：
+
+```bash
+cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
+node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 stop biz-insight-dev
+```
+
+以后要继续开发，再启动：
+
+```bash
+cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
+node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 restart biz-insight-dev
+```
+
+### 5. 如果正式网站挂了
+
+先检查状态：
+
+```bash
+cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
+node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 list
+curl -I http://127.0.0.1:3000
+```
+
+如果只是正式环境异常，先重启正式环境：
+
+```bash
+node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 restart biz-insight
+```
+
+如果重启还不行，就重新发布一次：
+
+```bash
+cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
+./node_modules/.bin/tsc --noEmit
+npm run build
+node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 restart biz-insight
+```
+
+### 6. 以后只需要记住这几句
+
+- 改代码看效果：看 `3001`
+- 给别人看正式站：看 `3000`
+- `3001` 看着没问题后：`tsc -> build -> restart biz-insight`
+
 ## 演示路径
 
 如果你要用当前系统做一次稳定演示，建议固定以下路径：

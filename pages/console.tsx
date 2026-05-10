@@ -427,7 +427,7 @@ export default function ConsolePage(props: Props) {
               onChange={e => setSelectedCompanyId(e.target.value)}
               className="rounded-xl border border-slate-200 px-4 py-3 text-sm"
             >
-              {currentCompanies.filter(c => c.is_active === 1).map(c => (
+              {currentCompanies.filter(c => c.is_active).map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>

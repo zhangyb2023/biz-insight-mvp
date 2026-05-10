@@ -11,7 +11,7 @@ import {
 } from "@/lib/db/repository";
 import type { ConsumptionCategory, SourceType } from "@/lib/types";
 
-const allowedCategories: ConsumptionCategory[] = ["新闻动态", "产品", "技术", "招聘", "生态"];
+const allowedCategories: ConsumptionCategory[] = ["产品技术", "生态合作", "战略动向", "政策法规", "人才动态"];
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   syncCompanies(loadCompanies());

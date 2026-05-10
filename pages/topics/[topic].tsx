@@ -146,7 +146,7 @@ export default function TopicPage({ topic, featuredItems, featuredKeywords }: Pr
   return (
     <>
       <Head>
-        <title>{topic.title} | Biz Insight MVP</title>
+        <title>{`${topic.title} | Biz Insight MVP`}</title>
       </Head>
       <main className="mx-auto max-w-7xl px-6 py-10">
         <section className="rounded-[2rem] border border-white/60 bg-white/85 p-8 shadow-panel backdrop-blur">

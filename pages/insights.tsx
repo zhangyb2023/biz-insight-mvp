@@ -2,6 +2,7 @@ import Head from "next/head";
 import { useState, useEffect, useMemo, useRef } from "react";
 
 type InsightItem = {
+  company_id: string;
   company_name: string;
   title: string;
   url: string;
@@ -26,9 +27,25 @@ type InsightItem = {
   insight_updated_at: string | null;
 };
 
+type ConsumptionApiItem = {
+  company_id?: string;
+  company_name?: string;
+  title?: string;
+  url?: string;
+  fetch_date?: string;
+  published_at?: string | null;
+  summary?: string | null;
+  insight_type?: string | null;
+  category?: string | null;
+  display_category?: string | null;
+  completeness_score?: number | null;
+  confidence?: number | null;
+  extracted_items?: Array<Partial<InsightItem> & { date?: string; summary?: string }>;
+};
+
 type TimeRange = "7d" | "30d" | "90d";
 type ImpactLevel = "高" | "中" | "低";
-type ConfidenceLevel = "高" | "中" | "低";
+type EvidenceQualityLevel = "高" | "中" | "低";
 type TrendDirection = "上升" | "稳定" | "下降";
 type EntityType = "target_company" | "source_media" | "other";
 type EvidencePriority = "core" | "reference" | "low";
@@ -52,7 +69,7 @@ const TIME_RANGES: { key: TimeRange; label: string }[] = [
 
 const METRIC_DEFINITIONS = {
   validEvidence: "已过滤明显噪音后，可用于形成判断的洞察条目数",
-  highConfidence: "来源较可靠、信息较完整、可优先参考的洞察数",
+  highQualityEvidence: "正文较完整、来源优先级较高、可优先作为分析材料的证据数",
   targetCompany: "本期洞察中出现的重点跟踪公司数量",
   primarySourceRatio: "直接来自目标公司官网、官方发布或一手公开资料的信息占比",
 };
@@ -153,6 +170,15 @@ function getDateRange(key: TimeRange): { from: Date; to: Date } {
   return { from, to };
 }
 
+function getPreviousDateRange(key: TimeRange): { from: Date; to: Date } {
+  const current = getDateRange(key);
+  const durationMs = current.to.getTime() - current.from.getTime();
+  return {
+    from: new Date(current.from.getTime() - durationMs),
+    to: new Date(current.from.getTime())
+  };
+}
+
 function formatDateShort(dateStr: string | null): string {
   if (!dateStr) return "";
   try {
@@ -218,11 +244,47 @@ function getImpactLevel(score: number | null): ImpactLevel {
   return "低";
 }
 
-function getConfidenceLevel(score: number | null): ConfidenceLevel {
+function getEvidenceQualityLevel(score: number | null): EvidenceQualityLevel {
   if (!score) return "中";
   if (score >= 0.60) return "高";
   if (score >= 0.50) return "中";
   return "低";
+}
+
+function getTrendDirection(currentCount: number, previousCount: number): TrendDirection {
+  if (currentCount > previousCount) return "上升";
+  if (currentCount < previousCount) return "下降";
+  return "稳定";
+}
+
+function mapConsumptionApiItemToInsightItem(item: ConsumptionApiItem): InsightItem {
+  const extracted = item.extracted_items?.[0] || {};
+
+  return {
+    company_id: item.company_id || "",
+    company_name: item.company_name || "未知",
+    title: extracted.title || item.title || "无标题",
+    url: extracted.url || item.url || "",
+    fetch_date: item.fetch_date || "",
+    published_at: item.published_at || extracted.date || null,
+    summary: extracted.summary || item.summary || null,
+    insight_type: item.insight_type || null,
+    category: item.display_category || item.category || "战略动向",
+    completeness_score: item.completeness_score ?? item.confidence ?? null,
+    clean_text: item.summary || "",
+    insight_event_type: extracted.insight_event_type || "",
+    insight_importance_level: extracted.insight_importance_level || "",
+    insight_evidence_strength: extracted.insight_evidence_strength ?? null,
+    insight_confidence: extracted.insight_confidence ?? item.confidence ?? null,
+    insight_statement: extracted.insight_statement || "",
+    insight_why_it_matters: extracted.insight_why_it_matters || "",
+    insight_next_action: extracted.insight_next_action || "",
+    insight_to_phua_relation: extracted.insight_to_phua_relation || [],
+    insight_topic_tags: extracted.insight_topic_tags || [],
+    insight_supporting_facts: extracted.insight_supporting_facts || [],
+    insight_risk_note: extracted.insight_risk_note || "",
+    insight_updated_at: extracted.insight_updated_at || null,
+  };
 }
 
 function getEntityType(companyName: string, url: string): EntityType {
@@ -460,7 +522,7 @@ function generateCoreJudgment(
     });
   }
   
-  // 3. 风险判断 - 基于置信度和信噪比
+  // 3. 风险判断 - 基于证据质量和信噪比
   const highRatio = highValueCount / total;
   const lowPriorityItems = items.filter(i => {
     const p = getEvidencePriority(i);
@@ -476,7 +538,7 @@ function generateCoreJudgment(
   } else if (highRatio < 0.25 && total > 10) {
     judgments.push({
       type: "风险",
-      text: `高置信证据不足(仅${highValueCount}条，占${Math.round(highRatio * 100)}%)，结论推断性质较强`
+      text: `高质量证据不足(仅${highValueCount}条，占${Math.round(highRatio * 100)}%)，结论推断性质较强`
     });
   } else if (primaryPercent < 20) {
     judgments.push({
@@ -486,7 +548,7 @@ function generateCoreJudgment(
   } else {
     judgments.push({
       type: "风险",
-      text: `样本量适中(${total}条)，置信度中等，结论供参考使用`
+      text: `样本量适中(${total}条)，证据质量中等，结论供参考使用`
     });
   }
   
@@ -529,7 +591,7 @@ interface InsightCardData {
   nextAction: string;
   timeRange: string;
   impactLevel: ImpactLevel;
-  confidenceLevel: ConfidenceLevel;
+  evidenceQualityLevel: EvidenceQualityLevel;
   company: string;
   entityType: EntityType;
   priority: EvidencePriority;
@@ -555,10 +617,10 @@ function InsightCard({ item }: { item: InsightCardData }) {
               "bg-slate-100 text-slate-600"
             }`}>影响力:{item.impactLevel}</span>
             <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-              item.confidenceLevel === "高" ? "bg-emerald-100 text-emerald-700" :
-              item.confidenceLevel === "中" ? "bg-blue-100 text-blue-700" :
+              item.evidenceQualityLevel === "高" ? "bg-emerald-100 text-emerald-700" :
+              item.evidenceQualityLevel === "中" ? "bg-blue-100 text-blue-700" :
               "bg-slate-100 text-slate-600"
-            }`}>置信度:{item.confidenceLevel}</span>
+            }`}>证据质量:{item.evidenceQualityLevel}</span>
             <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-600">
               {TOPICS.find(t => t.key === item.topic)?.label || item.topic}
             </span>
@@ -782,9 +844,6 @@ export default function InsightsPage() {
   } | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
 
-  // Markdown 下载状态
-  const [isDownloading, setIsDownloading] = useState(false);
-
   // 公司筛选状态
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>([]);
 
@@ -846,11 +905,12 @@ export default function InsightsPage() {
   const [briefLoading, setBriefLoading] = useState(true);
   const [briefError, setBriefError] = useState<string | null>(null);
   const [briefEmpty, setBriefEmpty] = useState(false);
+  const [briefGeneratedAt, setBriefGeneratedAt] = useState<string | null>(null);
+  const [briefCached, setBriefCached] = useState(false);
 
   const briefRequestIdRef = useRef<number>(0);
 
-  // 调用 generate-brief API
-  useEffect(() => {
+  function loadBrief(refresh = false) {
     const windowDaysMap: Record<TimeRange, number> = {
       "7d": 7,
       "30d": 30,
@@ -865,6 +925,8 @@ export default function InsightsPage() {
     setBriefError(null);
     setBriefEmpty(false);
     setBriefData(null);
+    setBriefGeneratedAt(null);
+    setBriefCached(false);
 
     fetch("/api/insights/generate-brief", {
       method: "POST",
@@ -872,7 +934,8 @@ export default function InsightsPage() {
       body: JSON.stringify({ 
         window_days: windowDays, 
         limit: 50,
-        company_ids: selectedCompanyIds.length > 0 ? selectedCompanyIds : undefined
+        company_ids: selectedCompanyIds.length > 0 ? selectedCompanyIds : undefined,
+        refresh
       }),
       signal: abortController.signal
     })
@@ -882,6 +945,8 @@ export default function InsightsPage() {
         if (data.ok) {
           setBriefData(data.result);
           setBriefEmpty(data.empty === true);
+          setBriefGeneratedAt(typeof data.generated_at === "string" ? data.generated_at : null);
+          setBriefCached(data.cached === true);
         } else {
           setBriefError("聚合洞察生成失败");
           setBriefEmpty(false);
@@ -901,13 +966,18 @@ export default function InsightsPage() {
     return () => {
       abortController.abort();
     };
+  }
+
+  // 先读取缓存；没有缓存时后端会生成一次，用户也可手动刷新。
+  useEffect(() => {
+    return loadBrief(false);
   }, [timeRange, selectedCompanyIds]);
 
   useEffect(() => {
-    fetch("/api/all-items")
+    fetch("/api/consumption?limit=200")
       .then((res) => res.json())
       .then((data) => {
-        setItems(data.items || []);
+        setItems((data.items || []).map(mapConsumptionApiItemToInsightItem));
         setLoading(false);
       })
       .catch(() => setLoading(false));
@@ -918,7 +988,7 @@ export default function InsightsPage() {
   const filteredByTime = useMemo(() => {
     const { from, to } = getDateRange(timeRange);
     return validItems.filter(item => {
-      const d = new Date(item.published_at || item.fetch_date);
+      const d = new Date(item.published_at as string);
       return d >= from && d <= to;
     });
   }, [validItems, timeRange]);
@@ -964,8 +1034,8 @@ export default function InsightsPage() {
       );
     }
     return result.sort((a, b) =>
-      new Date(b.published_at || b.fetch_date).getTime() -
-      new Date(a.published_at || a.fetch_date).getTime()
+      new Date(b.published_at as string).getTime() -
+      new Date(a.published_at as string).getTime()
     );
   }, [filteredByTime, activeTopic, coreOnly, includeReference, impactScope, evidenceType, searchQuery]);
 
@@ -978,8 +1048,21 @@ export default function InsightsPage() {
     return counts;
   }, [filteredByTime]);
 
-  const highValueCount = useMemo(() =>
-    filteredItems.filter(i => (i.insight_confidence ?? i.completeness_score ?? 0) >= 0.60).length
+  const previousTopicCounts = useMemo(() => {
+    const { from, to } = getPreviousDateRange(timeRange);
+    const counts: Record<string, number> = {};
+    validItems.forEach(item => {
+      const d = new Date(item.published_at as string);
+      if (d >= from && d < to) {
+        const topic = mapToTopic(item);
+        counts[topic] = (counts[topic] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [validItems, timeRange]);
+
+  const highQualityEvidenceCount = useMemo(() =>
+    filteredItems.filter(i => getEvidencePriority(i) === "core" || (i.completeness_score ?? 0) >= 0.75).length
   , [filteredItems]);
 
   const sourceDistribution = useMemo(() => {
@@ -996,8 +1079,8 @@ export default function InsightsPage() {
   }, [filteredItems]);
 
   const coreJudgments = useMemo(() =>
-    generateCoreJudgment(filteredItems, topicCounts, highValueCount, TIME_RANGES.find(t => t.key === timeRange)?.label || "", sourceDistribution)
-  , [filteredItems, topicCounts, highValueCount, timeRange, sourceDistribution]);
+    generateCoreJudgment(filteredItems, topicCounts, highQualityEvidenceCount, TIME_RANGES.find(t => t.key === timeRange)?.label || "", sourceDistribution)
+  , [filteredItems, topicCounts, highQualityEvidenceCount, timeRange, sourceDistribution]);
 
   const insightCards = useMemo((): InsightCardData[] =>
     filteredItems.map((item, idx) => ({
@@ -1010,13 +1093,13 @@ export default function InsightsPage() {
       nextAction: generateNextAction(item),
       timeRange: formatDateShort(item.published_at),
       impactLevel: getImpactLevel(item.completeness_score),
-      confidenceLevel: getConfidenceLevel(item.completeness_score),
+      evidenceQualityLevel: getEvidenceQualityLevel(item.completeness_score),
       company: item.company_name,
       entityType: getEntityType(item.company_name, item.url),
       priority: getEvidencePriority(item),
       url: item.url,
       cleanText: item.clean_text || "",
-      publishedAt: item.published_at || item.fetch_date,
+      publishedAt: item.published_at || "",
       score: item.completeness_score,
     }))
   , [filteredItems]);
@@ -1126,56 +1209,6 @@ export default function InsightsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadBriefMarkdown = async () => {
-    setIsDownloading(true);
-    try {
-      const windowDaysMap: Record<TimeRange, number> = { "7d": 7, "30d": 30, "90d": 90 };
-      const windowDays = windowDaysMap[timeRange];
-      const companyIds = selectedCompanyIds.length > 0 ? selectedCompanyIds : undefined;
-
-      const requestBody: any = {
-        window_days: windowDays,
-        format: "markdown"
-      };
-      if (companyIds) {
-        requestBody.company_ids = companyIds;
-      }
-      if (briefData) {
-        requestBody.brief_data = briefData;
-      }
-
-      const response = await fetch("/api/insights/generate-report", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody)
-      });
-
-      if (!response.ok) {
-        throw new Error("报告生成失败");
-      }
-
-      const data = await response.json();
-      if (!data.ok) {
-        throw new Error(data.error || "报告生成失败");
-      }
-
-      const blob = new Blob([data.markdown], { type: "text/markdown;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${data.title}.md`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "下载失败";
-      alert(`报告下载失败: ${msg}`);
-    } finally {
-      setIsDownloading(false);
-    }
-  };
-
   return (
     <>
       <Head><title>商业洞察 | Biz Insight</title></Head>
@@ -1220,27 +1253,7 @@ export default function InsightsPage() {
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                生成洞察报告
-              </button>
-              <button
-                onClick={handleDownloadBriefMarkdown}
-                disabled={isDownloading}
-                title={selectedCompanyIds.length === 1 ? `下载${COMPANY_OPTIONS.find(c => c.id === selectedCompanyIds[0])?.name || '该公司'}的观察报告` : "下载全部公司的总览报告"}
-                className="flex items-center gap-2 rounded-lg border border-violet-200 bg-white px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50 disabled:opacity-50 transition-all"
-              >
-                {isDownloading ? (
-                  <>
-                    <span className="h-4 w-4 border-2 border-violet-300 border-t-violet-600 rounded-full animate-spin" />
-                    生成中...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    下载 Markdown 报告
-                  </>
-                )}
+                生成/导出报告
               </button>
             </div>
           </div>
@@ -1254,7 +1267,7 @@ export default function InsightsPage() {
               <div className="flex items-center justify-center py-8">
                 <div className="text-center">
                   <div className="h-8 w-8 mx-auto border-4 border-white/30 border-t-white rounded-full animate-spin mb-3" />
-                  <p className="text-sm opacity-80">正在生成聚合洞察...</p>
+                  <p className="text-sm opacity-80">正在读取聚合洞察...</p>
                   <p className="text-xs opacity-60 mt-1">
                     {selectedCompanyIds.length === 1 
                       ? `${COMPANY_OPTIONS.find(c => c.id === selectedCompanyIds[0])?.name || selectedCompanyIds[0]} · ${timeRangeLabel}`
@@ -1290,18 +1303,33 @@ export default function InsightsPage() {
           ) : briefData ? (
             <>
               {/* 范围提示头 */}
-              <div className="flex items-center justify-center gap-4 text-xs text-slate-600 bg-slate-50 rounded-lg px-4 py-2 border border-slate-200">
-                <span className="flex items-center gap-1">
-                  <span>📅</span> {timeRangeLabel}
-                </span>
-                <span className="text-slate-300">|</span>
-                <span className="flex items-center gap-1">
-                  <span>🏢</span> {selectedCompanyIds.length === 1 ? (COMPANY_OPTIONS.find(c => c.id === selectedCompanyIds[0])?.name || "单公司") : "全部公司"}
-                </span>
-                <span className="text-slate-300">|</span>
-                <span className="flex items-center gap-1">
-                  <span>📊</span> {filteredItems.length}条动态
-                </span>
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 bg-slate-50 rounded-lg px-4 py-2 border border-slate-200">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="flex items-center gap-1">
+                    <span>📅</span> {timeRangeLabel}
+                  </span>
+                  <span className="text-slate-300">|</span>
+                  <span className="flex items-center gap-1">
+                    <span>🏢</span> {selectedCompanyIds.length === 1 ? (COMPANY_OPTIONS.find(c => c.id === selectedCompanyIds[0])?.name || "单公司") : "全部公司"}
+                  </span>
+                  <span className="text-slate-300">|</span>
+                  <span className="flex items-center gap-1">
+                    <span>📊</span> {filteredItems.length}条动态
+                  </span>
+                  {briefGeneratedAt && (
+                    <>
+                      <span className="text-slate-300">|</span>
+                      <span>{briefCached ? "缓存生成于" : "刚刚生成"}：{formatDateFull(briefGeneratedAt)}</span>
+                    </>
+                  )}
+                </div>
+                <button
+                  onClick={() => loadBrief(true)}
+                  disabled={briefLoading}
+                  className="rounded-md border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  重新生成聚合洞察
+                </button>
               </div>
               {/* 核心判断卡 */}
               {briefData.window_summary.overall_judgement && (
@@ -1347,7 +1375,7 @@ export default function InsightsPage() {
                               change.scientific_confidence >= 50 ? "bg-amber-100 text-amber-700" :
                               "bg-slate-100 text-slate-600"
                             }`}>
-                              置信率: {change.scientific_confidence}%
+                              证据支撑: {change.scientific_confidence}%
                             </span>
                           ) : (
                             <span className={`text-xs px-1.5 py-0.5 rounded ${
@@ -1355,7 +1383,7 @@ export default function InsightsPage() {
                               change.evidence_count >= 2 ? "bg-amber-100 text-amber-700" :
                               "bg-slate-100 text-slate-600"
                             }`}>
-                              置信率: {Math.min(95, 50 + (change.evidence_count || 0) * 15)}%
+                              证据支撑: {Math.min(95, 50 + (change.evidence_count || 0) * 15)}%
                             </span>
                           )}
                         </div>
@@ -1548,11 +1576,11 @@ export default function InsightsPage() {
             </div>
             <div className="rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 p-5 text-white">
               <p className="text-xs opacity-80 flex items-center">
-                高置信证据
-                <InfoTooltip text={METRIC_DEFINITIONS.highConfidence} />
+                高质量证据
+                <InfoTooltip text={METRIC_DEFINITIONS.highQualityEvidence} />
               </p>
-              <p className="mt-1 text-3xl font-bold">{highValueCount}</p>
-              <p className="text-xs opacity-70 mt-1">条 (≥60%)</p>
+              <p className="mt-1 text-3xl font-bold">{highQualityEvidenceCount}</p>
+              <p className="text-xs opacity-70 mt-1">条材料</p>
             </div>
             <div className="rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 p-5 text-white">
               <p className="text-xs opacity-80 flex items-center">
@@ -1568,7 +1596,7 @@ export default function InsightsPage() {
                 <InfoTooltip text={METRIC_DEFINITIONS.primarySourceRatio} />
               </p>
               <p className="mt-1 text-3xl font-bold">{sourceDistribution.find(s => s.label === "一手信源")?.percent || 0}%</p>
-              <p className="text-xs opacity-70 mt-1">高置信判断依据</p>
+              <p className="text-xs opacity-70 mt-1">判断依据质量</p>
             </div>
           </section>
 
@@ -1623,7 +1651,7 @@ export default function InsightsPage() {
                   key={topic.key}
                   topic={topic}
                   count={topicCounts[topic.key] || 0}
-                  trend={(topicCounts[topic.key] || 0) >= 5 ? "上升" : (topicCounts[topic.key] || 0) >= 2 ? "稳定" : "下降"}
+                  trend={getTrendDirection(topicCounts[topic.key] || 0, previousTopicCounts[topic.key] || 0)}
                   isActive={activeTopic === topic.key}
                   onClick={() => setActiveTopic(activeTopic === topic.key ? "all" : topic.key)}
                 />
@@ -1756,8 +1784,8 @@ export default function InsightsPage() {
                         <p className="font-medium text-ink">{filteredItems.length}条</p>
                       </div>
                       <div>
-                        <p className="text-slate-500">高置信</p>
-                        <p className="font-medium text-ink">{highValueCount}条</p>
+                        <p className="text-slate-500">高质量证据</p>
+                        <p className="font-medium text-ink">{highQualityEvidenceCount}条</p>
                       </div>
                       <div>
                         <p className="text-slate-500">涉及公司</p>

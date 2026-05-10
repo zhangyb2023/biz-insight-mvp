@@ -90,6 +90,91 @@ const executiveCompanyTypeMap: Record<string, string> = {
 const executiveCompanyTypeFallback = "其他动态";
 
 const consumptionCategories: ConsumptionCategory[] = ["产品技术", "生态合作", "战略动向", "政策法规", "人才动态"];
+const englishMonthMap: Record<string, string> = {
+  january: "01",
+  jan: "01",
+  february: "02",
+  feb: "02",
+  march: "03",
+  mar: "03",
+  april: "04",
+  apr: "04",
+  may: "05",
+  june: "06",
+  jun: "06",
+  july: "07",
+  jul: "07",
+  august: "08",
+  aug: "08",
+  september: "09",
+  sep: "09",
+  sept: "09",
+  october: "10",
+  oct: "10",
+  november: "11",
+  nov: "11",
+  december: "12",
+  dec: "12"
+};
+
+function normalizeDateOnly(value?: string | null) {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  const isoMatch = trimmed.match(/(20\d{2})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+  const cnMatch = trimmed.match(/(20\d{2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]?/);
+  if (cnMatch) {
+    const [, year, month, day] = cnMatch;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+  const englishMonthMatch = trimmed.match(/\b(January|Jan|February|Feb|March|Mar|April|Apr|May|June|Jun|July|Jul|August|Aug|September|Sept|Sep|October|Oct|November|Nov|December|Dec)\s+(\d{1,2})(?:st|nd|rd|th)?[,]?\s+(20\d{2})\b/i);
+  if (englishMonthMatch) {
+    const [, monthName, day, year] = englishMonthMatch;
+    const month = englishMonthMap[monthName.toLowerCase()];
+    if (month) {
+      return `${year}-${month}-${day.padStart(2, "0")}`;
+    }
+  }
+  const englishDayMonthMatch = trimmed.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(January|Jan|February|Feb|March|Mar|April|Apr|May|June|Jun|July|Jul|August|Aug|September|Sept|Sep|October|Oct|November|Nov|December|Dec)[,]?\s+(20\d{2})\b/i);
+  if (englishDayMonthMatch) {
+    const [, day, monthName, year] = englishDayMonthMatch;
+    const month = englishMonthMap[monthName.toLowerCase()];
+    if (month) {
+      return `${year}-${month}-${day.padStart(2, "0")}`;
+    }
+  }
+  const parsed = Date.parse(trimmed);
+  if (Number.isNaN(parsed)) return null;
+  return new Date(parsed).toISOString().slice(0, 10);
+}
+
+function extractDateFromText(text?: string | null) {
+  if (!text) return null;
+  return normalizeDateOnly(text);
+}
+
+function resolvePublishedDate(input: {
+  publishedAt?: string | null;
+  fetchDate?: string | null;
+  title?: string | null;
+  summary?: string | null;
+  cleanText?: string | null;
+}) {
+  const publishedDate = normalizeDateOnly(input.publishedAt);
+  const fetchDate = normalizeDateOnly(input.fetchDate);
+  const textDate = extractDateFromText([input.summary, input.title, input.cleanText].filter(Boolean).join(" "));
+
+  if (publishedDate && publishedDate !== fetchDate) {
+    return publishedDate;
+  }
+  if (textDate) {
+    return textDate;
+  }
+  return null;
+}
 
 function mapConsumptionCategory(input: {
   category?: string | null;
@@ -1322,7 +1407,9 @@ function isPrimaryDisplayCandidate(input: {
     return false;
   }
 
-  // [TEMP DISABLED] if (!input.publishedAt) { return false; }
+  if (!input.publishedAt) {
+    return false;
+  }
 
   if ((input.cleanText || "").trim().length < 300) {
     return false;
@@ -1335,7 +1422,7 @@ function dedupePrimaryDisplayItems<T extends { url: string; canonical_url?: stri
   const deduped: T[] = [];
 
   for (const item of items) {
-    const key = `${normalizeDisplayUrl(item.canonical_url || item.url)}::${(item.title || "").trim()}`;
+    const key = normalizeDisplayUrl(item.canonical_url || item.url);
     if (seen.has(key)) {
       continue;
     }
@@ -1344,6 +1431,60 @@ function dedupePrimaryDisplayItems<T extends { url: string; canonical_url?: stri
   }
 
   return deduped;
+}
+
+function buildLegacyConsumptionItems(filters: ConsumptionFilters = {}) {
+  return getAllInsightItems()
+    .map((item) => {
+      const quality = evaluateSourceQuality({
+        url: item.url,
+        title: item.title,
+        cleanText: item.clean_text || item.summary || "",
+        extractedItems: []
+      });
+
+      const normalizedItem: ConsumptionItem = {
+        company_id: item.company_id,
+        company_name: item.company_name,
+        url: item.url,
+        canonical_url: item.url,
+        title: item.title,
+        fetch_date: item.fetch_date,
+        published_at: resolvePublishedDate({
+          publishedAt: item.published_at,
+          fetchDate: item.fetch_date,
+          title: item.title,
+          summary: item.summary,
+          cleanText: item.clean_text
+        }),
+        page_kind: "detail",
+        completeness_score: item.completeness_score ?? 0.7,
+        extracted_items: [],
+        summary: item.summary || "",
+        insight_type: item.insight_type || "news",
+        category: item.category || "战略动向",
+        confidence: item.insight_confidence ?? item.completeness_score ?? 0.6,
+        display_category: mapConsumptionCategory({
+          category: item.category,
+          insightType: item.insight_type,
+          title: item.title,
+          url: item.url,
+          summary: item.summary
+        }),
+        source_domain: quality.source_domain ?? "",
+        source_type: quality.source_type ?? "",
+        quality_score: quality.quality_score ?? 0,
+        is_high_value: quality.is_high_value ?? false,
+        is_noise: quality.is_noise ?? false,
+        noise_reason: quality.noise_reason ?? "",
+        quality_reason: quality.quality_reason ?? "",
+        matched_rules: quality.matched_rules ?? [],
+        source_signals: quality.source_signals ?? []
+      };
+
+      return normalizedItem;
+    })
+    .filter((item) => matchesConsumptionFilters(item, filters));
 }
 
 export function listConsumptionItems(filters: ConsumptionFilters = {}): ConsumptionItem[] {
@@ -1363,7 +1504,13 @@ export function listConsumptionItems(filters: ConsumptionFilters = {}): Consumpt
       canonical_url: item.canonical_url ?? null,
       title: item.title,
       fetch_date: item.fetch_date,
-      published_at: item.published_at ?? null,
+      published_at: resolvePublishedDate({
+        publishedAt: item.published_at,
+        fetchDate: item.fetch_date,
+        title: item.title,
+        summary: item.summary,
+        cleanText: item.clean_text
+      }),
       page_kind: item.page_kind ?? null,
       completeness_score: item.completeness_score ?? 0,
       extracted_items: extractedItems,
@@ -1391,7 +1538,7 @@ export function listConsumptionItems(filters: ConsumptionFilters = {}): Consumpt
     };
   });
 
-  const filteredItems = dedupePrimaryDisplayItems(normalizedRows)
+  const strictFilteredItems = dedupePrimaryDisplayItems(normalizedRows)
     .filter((item) =>
       isPrimaryDisplayCandidate({
         url: item.url,
@@ -1406,6 +1553,10 @@ export function listConsumptionItems(filters: ConsumptionFilters = {}): Consumpt
       }) && matchesConsumptionFilters(item, filters)
     )
     .map(({ _clean_text: _cleanText, ...item }) => item);
+
+  const filteredItems = strictFilteredItems.length > 0
+    ? strictFilteredItems
+    : dedupePrimaryDisplayItems(buildLegacyConsumptionItems(filters));
 
   return typeof filters.limit === "number" ? filteredItems.slice(0, filters.limit) : filteredItems;
 }
@@ -1896,6 +2047,14 @@ export function getTableColumns(table: string) {
 
 export function getAllInsightItems() {
   const db = getDb();
+  const directDocumentUrls = new Set(
+    (db.prepare(`
+      SELECT s.url
+      FROM sources s
+      JOIN documents d ON d.source_id = s.id
+      WHERE d.id IS NOT NULL
+    `).all() as Array<{ url: string }>).map((row) => normalizeDisplayUrl(row.url))
+  );
   const rows = db.prepare(`
     SELECT 
       c.id as company_id,
@@ -1917,7 +2076,7 @@ export function getAllInsightItems() {
     WHERE c.is_active = 1
       AND s.title IS NOT NULL
       AND s.title != ''
-    ORDER BY s.fetch_date DESC
+    ORDER BY COALESCE(d.published_at, s.fetch_date) DESC
     LIMIT 200
   `).all() as Array<{
     company_id: string;
@@ -1957,6 +2116,7 @@ export function getAllInsightItems() {
     insight_supporting_facts: string[];
     insight_risk_note: string;
     insight_updated_at: string | null;
+    clean_text: string | null;
   }> = [];
 
   for (const row of rows) {
@@ -1964,13 +2124,23 @@ export function getAllInsightItems() {
     
     if (extractedItems.length > 0) {
       for (const item of extractedItems) {
+        const itemUrl = item.url || row.url;
+        if (item.url && normalizeDisplayUrl(item.url) !== normalizeDisplayUrl(row.url) && directDocumentUrls.has(normalizeDisplayUrl(item.url))) {
+          continue;
+        }
         result.push({
           company_id: row.company_id,
           company_name: row.company_name,
           title: item.title || row.title,
-          url: item.url || row.url,
+          url: itemUrl,
           fetch_date: row.fetch_date,
-          published_at: item.date || row.published_at,
+          published_at: resolvePublishedDate({
+            publishedAt: item.date || (item.url ? null : row.published_at),
+            fetchDate: row.fetch_date,
+            title: item.title || row.title,
+            summary: item.summary,
+            cleanText: row.clean_text
+          }),
           summary: item.summary || null,
           insight_type: row.insight_type || "news",
           category: item.category || row.category || "战略动向",
@@ -1987,6 +2157,7 @@ export function getAllInsightItems() {
           insight_supporting_facts: item.insight_supporting_facts || [],
           insight_risk_note: item.insight_risk_note || "",
           insight_updated_at: item.insight_updated_at || null,
+          clean_text: row.clean_text || null,
         });
       }
     } else {
@@ -2013,6 +2184,7 @@ export function getAllInsightItems() {
         insight_supporting_facts: [],
         insight_risk_note: "",
         insight_updated_at: null,
+        clean_text: row.clean_text || null,
       });
     }
   }

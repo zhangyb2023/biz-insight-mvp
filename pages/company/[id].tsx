@@ -19,7 +19,7 @@ export default function CompanyPage({ company, documents }: Props) {
   return (
     <>
       <Head>
-        <title>{company.name} | Biz Insight MVP</title>
+        <title>{`${company.name} | Biz Insight MVP`}</title>
       </Head>
       <main className="mx-auto max-w-6xl px-6 py-10">
         <a

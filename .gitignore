@@ -3,6 +3,7 @@ node_modules/
 
 # Build outputs
 .next/
+.next-dev/
 out/
 dist/
 
@@ -16,6 +17,7 @@ dist/
 
 # Crawl cache (too large, regenerate on new machine)
 data/crawl_cache/
+data/brief-cache.json
 
 # Logs
 *.log
@@ -33,3 +35,4 @@ tsconfig.tsbuildinfo
 *.db
 sqlite-backup.tar.gz
 db/
+backups/*.gz

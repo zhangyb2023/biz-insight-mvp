@@ -1,20 +1,34 @@
 import fs from "fs";
 import path from "path";
-import { DatabaseSync } from "node:sqlite";
+
+type SqliteStatement = {
+  all: (...params: unknown[]) => unknown[];
+  get: (...params: unknown[]) => unknown;
+  run: (...params: unknown[]) => unknown;
+};
+
+type SqliteDatabase = {
+  prepare: (sql: string) => SqliteStatement;
+  exec: (sql: string) => void;
+};
+
+type BetterSqlite3Constructor = new (filename: string) => SqliteDatabase;
+
+const BetterSqlite3 = require("better-sqlite3") as BetterSqlite3Constructor;
 
 const dbDir = path.join(process.cwd(), "db");
 const dbPath = path.join(dbDir, "sqlite.db");
 
-let dbInstance: DatabaseSync | undefined;
+let dbInstance: SqliteDatabase | undefined;
 
-function ensureColumn(db: DatabaseSync, table: string, column: string, definition: string) {
+function ensureColumn(db: SqliteDatabase, table: string, column: string, definition: string) {
   const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
   if (!columns.some((item) => item.name === column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
 }
 
-function ensureTables(db: DatabaseSync) {
+function ensureTables(db: SqliteDatabase) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS companies (
       id TEXT PRIMARY KEY,
@@ -180,7 +194,7 @@ function ensureTables(db: DatabaseSync) {
   `);
 }
 
-function ensureLegacyColumns(db: DatabaseSync) {
+function ensureLegacyColumns(db: SqliteDatabase) {
   ensureColumn(db, "companies", "is_active", "INTEGER NOT NULL DEFAULT 1");
   ensureColumn(db, "documents", "extracted_items", "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn(db, "documents", "canonical_url", "TEXT");
@@ -203,7 +217,7 @@ function ensureLegacyColumns(db: DatabaseSync) {
 export function getDb() {
   if (!dbInstance) {
     fs.mkdirSync(dbDir, { recursive: true });
-    dbInstance = new DatabaseSync(dbPath);
+    dbInstance = new BetterSqlite3(dbPath);
     ensureTables(dbInstance);
     ensureLegacyColumns(dbInstance);
   }

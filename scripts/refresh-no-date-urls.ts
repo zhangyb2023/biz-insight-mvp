@@ -2,12 +2,19 @@
  * 只重新爬取当前无日期的有价值URL
  * 用法: npx tsx scripts/refresh-no-date-urls.ts
  */
-import { DatabaseSync } from "node:sqlite";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import https from "https";
 import * as cheerio from "cheerio";
+
+const BetterSqlite3 = require("better-sqlite3") as new (filename: string) => {
+  prepare: (sql: string) => {
+    all: (...params: unknown[]) => unknown[];
+    run: (...params: unknown[]) => unknown;
+  };
+  close: () => void;
+};
 
 // ---- Date extraction (same as cleanText.ts) ----
 const RAW_HTML_DATE_PATTERNS: Array<{ re: RegExp; label: string }> = [
@@ -110,7 +117,7 @@ function isWorthCrawling(url: string, cleanText: string): boolean {
 
 // ---- Main ----
 async function main() {
-const db = new DatabaseSync("db/sqlite.db");
+const db = new BetterSqlite3("db/sqlite.db");
 
 // Get docs without valid dates
 const noDateDocs = db.prepare(`

@@ -27,7 +27,7 @@ export default function DataTablePage({ table, includeInactive, columns, rows }:
   return (
     <>
       <Head>
-        <title>{table} | Data Explorer</title>
+        <title>{`${table} | Data Explorer`}</title>
       </Head>
       <main className="mx-auto max-w-7xl px-6 py-10">
         <div className="flex items-end justify-between gap-4">

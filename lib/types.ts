@@ -82,7 +82,7 @@ export type ExtractedItem = {
   insight_updated_at?: string | null;
 };
 
-export type ConsumptionCategory = "新闻动态" | "产品" | "技术" | "招聘" | "生态";
+export type ConsumptionCategory = "产品技术" | "生态合作" | "战略动向" | "政策法规" | "人才动态";
 
 export type ConsumptionItem = {
   company_id: string;

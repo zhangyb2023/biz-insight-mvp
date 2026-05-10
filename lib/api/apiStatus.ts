@@ -362,7 +362,7 @@ export async function checkSiliconFlowStatus(): Promise<ApiStatus> {
         message: "API Key 有效",
         description: "向量嵌入：语义相似度匹配",
         quota: {
-          message: "置信率计算：判断新闻与洞察的语义相关性"
+          message: "证据支撑率计算：判断新闻与洞察的语义相关性"
         }
       };
     }

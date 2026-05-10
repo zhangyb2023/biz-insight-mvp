@@ -70,7 +70,7 @@ export default function JobDetailPage({ job, steps }: Props) {
   return (
     <>
       <Head>
-        <title>Job {job.id} | Biz Insight MVP</title>
+        <title>{`Job ${job.id} | Biz Insight MVP`}</title>
       </Head>
       <main className="mx-auto max-w-7xl px-6 py-10">
         <div className="flex items-end justify-between gap-4">

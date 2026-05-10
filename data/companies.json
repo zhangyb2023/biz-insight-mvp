@@ -45,6 +45,11 @@
     "id": "reachauto",
     "name": "东软睿驰",
     "website": "https://www.reachauto.com/",
+    "urls": [
+      "https://www.reachauto.com/corporate-news/industry-activities/",
+      "https://www.reachauto.com/corporate-news/ecological-alliance/",
+      "https://www.reachauto.com/corporate-news/product-technology/"
+    ],
     "keywords": [
       "AUTOSAR",
       "基础软件",

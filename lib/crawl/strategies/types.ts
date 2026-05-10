@@ -29,6 +29,8 @@ export type ExtractedItem = {
   summary?: string;
   translatedSummary?: string;
   content?: string;
+  imageUrl?: string;
+  category?: string;
 };
 
 export type StrategyRegistry = {

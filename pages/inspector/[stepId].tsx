@@ -41,7 +41,7 @@ export default function InspectorPage(props: Props) {
   return (
     <>
       <Head>
-        <title>I/O Inspector {step.id} | Biz Insight MVP</title>
+        <title>{`I/O Inspector ${step.id} | Biz Insight MVP`}</title>
       </Head>
       <main className="mx-auto max-w-7xl px-6 py-10">
         <div className="flex items-end justify-between gap-4">

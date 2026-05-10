@@ -6,7 +6,7 @@
 import https from "https";
 import http from "http";
 
-const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY || "fc-30d1745f7cf44e99a212e84dd61368d4";
+const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY || "";
 const TIMEOUT_MS = 20000;
 
 interface JinaResult { title: string; url: string; content: string; publishedTime?: string; error?: string; }

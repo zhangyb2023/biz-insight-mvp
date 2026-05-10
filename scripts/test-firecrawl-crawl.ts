@@ -3,7 +3,7 @@
  * Firecrawl Crawl 深度爬取测试 - 作为最后兜底
  */
 
-const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY || "fc-30d1745f7cf44e99a212e84dd61368d4";
+const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY || "";
 const TIMEOUT_MS = 60000;
 const MAX_PAGES = 20;
 

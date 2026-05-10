@@ -19,6 +19,7 @@ import {
   upsertInsight,
   upsertSourceRegistryStatus
 } from "@/lib/db/repository";
+import { checkAndFixStaleJobs } from "@/lib/db/jobTimeout";
 import { resolveCompanyUrls } from "@/lib/search/searchUrls";
 import type { ExtractedItem, SourceRegistryRecord, TriggerType, UrlType } from "@/lib/types";
 import { intelligentCrawl, batchIntelligentCrawl, type IntelligentSourceType } from "@/lib/crawl/intelligentCrawl";
@@ -173,6 +174,8 @@ function shouldExpandDiscoveredLinks(input: {
 }
 
 export async function runCrawlJob(options: RunCrawlJobOptions = {}) {
+  checkAndFixStaleJobs();
+
   const companies = loadCompanies();
   syncCompanies(companies);
 
@@ -734,7 +737,7 @@ export async function runCrawlJob(options: RunCrawlJobOptions = {}) {
             toolType: "database",
             toolName: "sqlite",
             moduleName: "lib/db/repository.ts",
-            runtime: "node:sqlite",
+            runtime: "better-sqlite3",
             inputJson: { source_id: sourceId, document_id: documentId },
             nextStep: "aggregate_display"
           });
@@ -873,7 +876,7 @@ export async function runCrawlJob(options: RunCrawlJobOptions = {}) {
           toolType: "database",
           toolName: "sqlite",
           moduleName: "lib/db/repository.ts",
-          runtime: "node:sqlite",
+          runtime: "better-sqlite3",
           inputJson: { source_id: sourceId, document_id: documentId },
           nextStep: "aggregate_display"
         });

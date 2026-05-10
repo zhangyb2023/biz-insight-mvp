@@ -5,8 +5,16 @@ import crypto from "crypto";
  */
 import fs from "fs";
 import path from "path";
-import { DatabaseSync } from "node:sqlite";
 import * as cheerio from "cheerio";
+
+const BetterSqlite3 = require("better-sqlite3") as new (filename: string) => {
+  prepare: (sql: string) => {
+    all: (...params: unknown[]) => unknown[];
+    get: (...params: unknown[]) => unknown;
+    run: (...params: unknown[]) => unknown;
+  };
+  close: () => void;
+};
 
 const RAW_HTML_DATE_PATTERNS: Array<{ re: RegExp; label: string }> = [
   { re: /((?:19|20)\d{2}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}(?::\d{2})?(?:[+-]\d{2}:?\d{2}|Z)?)?)/i, label: "ISO8601" },
@@ -65,7 +73,7 @@ function extractDateFromHtml(html: string): string | null {
   return null;
 }
 
-const db = new DatabaseSync("db/sqlite.db");
+const db = new BetterSqlite3("db/sqlite.db");
 
 // 找出所有文档（含无日期的）
 const rows = db.prepare(`
@@ -112,9 +120,12 @@ console.log(`总文档: ${rows.length}`);
 console.log(`更新: ${updated} | 跳过: ${skipped} | 错误: ${error}`);
 
 // 统计
-const withDate = db.prepare("SELECT COUNT(*) FROM documents WHERE published_at IS NOT NULL AND published_at > '2026-01-01'").get() as number;
-const withoutDate = db.prepare("SELECT COUNT(*) FROM documents WHERE published_at IS NULL OR published_at <= '2026-01-01'").get() as number;
-const total = db.prepare("SELECT COUNT(*) FROM documents").get() as number;
+const withDateRow = db.prepare("SELECT COUNT(*) as count FROM documents WHERE published_at IS NOT NULL AND published_at > '2026-01-01'").get() as { count: number };
+const withoutDateRow = db.prepare("SELECT COUNT(*) as count FROM documents WHERE published_at IS NULL OR published_at <= '2026-01-01'").get() as { count: number };
+const totalRow = db.prepare("SELECT COUNT(*) as count FROM documents").get() as { count: number };
+const withDate = withDateRow.count;
+const withoutDate = withoutDateRow.count;
+const total = totalRow.count;
 console.log(`\n有2026后日期: ${withDate} (${Math.round(withDate/total*100)}%)`);
 console.log(`无有效日期: ${withoutDate}`);
 

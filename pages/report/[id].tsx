@@ -20,7 +20,7 @@ export default function ReportPage({ company, documents }: Props) {
   return (
     <>
       <Head>
-        <title>{company.name} Report</title>
+        <title>{`${company.name} Report`}</title>
       </Head>
       <main className="mx-auto max-w-4xl px-6 py-10">
         <a

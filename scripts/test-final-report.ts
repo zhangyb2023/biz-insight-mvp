@@ -6,8 +6,8 @@
 
 import https from "https";
 
-const TAVILY_KEY = process.env.TAVILY_API_KEY || "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";
-const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY || "fc-30d1745f7cf44e99a212e84dd61368d4";
+const TAVILY_KEY = process.env.TAVILY_API_KEY || "";
+const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY || "";
 const TIMEOUT_MS = 20000;
 
 interface JinaResult { title: string; url: string; content: string; publishedTime?: string; error?: string; }
