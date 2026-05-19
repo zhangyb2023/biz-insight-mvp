@@ -42,6 +42,14 @@ const modules = [
     color: "bg-cyan-600"
   },
   {
+    id: "llm-trace",
+    name: "LLM 调试台",
+    description: "查看模型输入输出，基于历史输入试跑提示词，不影响正式报告",
+    href: "/llm-trace",
+    icon: "🧪",
+    color: "bg-indigo-600"
+  },
+  {
     id: "workbench",
     name: "工作台",
     description: "选择公司执行智能爬取，支持单选和多选，实时显示进度和关键指标",

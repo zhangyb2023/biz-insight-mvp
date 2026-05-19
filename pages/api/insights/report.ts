@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+const REPORT_PROMPT_VERSION = "phua-report-v1";
 
 interface CompactItem {
   company: string;
@@ -300,6 +301,8 @@ ${content.substring(0, 500)}
         window_days: body.window_days,
         generated_at: new Date().toISOString(),
         model: DEEPSEEK_MODEL,
+        model_name: DEEPSEEK_MODEL,
+        prompt_version: REPORT_PROMPT_VERSION,
         item_count: body.items.length,
         filters: body.filters
       },

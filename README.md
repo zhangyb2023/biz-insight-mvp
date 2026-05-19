@@ -104,6 +104,7 @@ biz-insight-mvp/
 - `/list-all`：动态信息列表
 - `/workbench`：工作台，支持选公司执行抓取
 - `/health`：系统健康度和错误分组
+- `/llm-trace`：LLM 调试台，查看 prompt 版本、输入、原始输出和解析结果，也可基于历史输入试跑提示词
 - `/console`：公司与来源维护
 - `/briefing`：简报展示页
 - `/briefing-simple`：简化简报页
@@ -205,14 +206,21 @@ npm run verify:source-quality
 
 当前正式站点运行在 PM2 托管的生产模式下。日常开发和正式发布建议分开进行。
 
-### 1. 开发调试
+### 1. 家里开发机：开发调试
 
 ```bash
 cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
 npm run dev
 ```
 
-### 2. 发布前检查
+如果家里同时维护生产预览和开发预览，建议使用：
+
+- `3000`：生产预览
+- `3001`：开发预览
+
+公司 WSL 展示机建议只保留 `3000`，不要在公司 WSL 上直接开发。
+
+### 2. 家里开发机：发布前检查
 
 ```bash
 cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
@@ -220,17 +228,36 @@ cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
 npm run build
 ```
 
-### 3. 重启正式站点
+### 3. 家里开发机：提交到 GitHub
 
 ```bash
-cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
-node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 restart biz-insight
+git status --short
+git add .
+git commit -m "描述本次改动"
+git push
 ```
 
-### 4. 发布后验证
+### 4. 公司 WSL：拉取并发布
+
+公司 WSL 只作为展示环境，代码来源以 GitHub 为准。
+
+```bash
+cd ~/biz-insight-mvp
+git pull
+npm install
+./node_modules/.bin/tsc --noEmit
+npm run build
+node ./node_modules/pm2/bin/pm2 restart biz-insight
+```
+
+### 5. 发布后验证
 
 ```bash
 curl -I http://127.0.0.1:3000
+curl -I http://127.0.0.1:3000/workbench
+curl -I http://127.0.0.1:3000/insights
+curl -I http://127.0.0.1:3000/health
+curl -I http://127.0.0.1:3000/briefing
 ```
 
 建议至少手动检查以下页面：
@@ -239,6 +266,22 @@ curl -I http://127.0.0.1:3000
 - `/workbench`
 - `/insights`
 - `/health`
+- `/briefing`
+- `/llm-trace`
+
+如果 `/insights` 返回 500，但 `npm run build` 成功，优先重新执行公司 WSL 的发布流程，确保 `.next` 生产构建产物完整。
+
+### 6. 数据与密钥迁移原则
+
+GitHub 只保存代码和文档，不保存运行密钥。
+
+公司 WSL 首次部署或数据迁移时，需要单独复制：
+
+- `.env.local`
+- `db/sqlite.db`
+- `data/companies.json`
+
+复制数据库前，先确认没有正在运行的抓取任务。
 
 ## 小白操作指南
 
@@ -246,14 +289,16 @@ curl -I http://127.0.0.1:3000
 
 ### 先记住两个地址
 
-- `3001`：开发环境。你改代码后，这里会直接看到变化。
 - `3000`：生产环境。正式给别人看的网站，用这个地址。
+- `3001`：可选开发环境。只有家里开发机需要边改边看时才需要。
 
 你维护的是同一套代码，不是两套代码。
 
+公司 WSL 展示机只保留 `3000` 即可，不需要启动 `3001`。
+
 ### 1. 先看当前状态
 
-查看两个环境是否在运行：
+查看 PM2 环境是否在运行：
 
 ```bash
 cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
@@ -266,16 +311,21 @@ node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 list
 ss -ltnp | grep -E ':3000|:3001' || true
 ```
 
-本机检查网页是否能打开：
+本机检查网页是否能打开。公司 WSL 只需要检查 `3000`：
 
 ```bash
 curl -I http://127.0.0.1:3000
+```
+
+如果家里开发机启用了 `3001`，再额外检查：
+
+```bash
 curl -I http://127.0.0.1:3001
 ```
 
-### 2. 开发时怎么用
+### 2. 家里开发时怎么用
 
-如果开发环境 `3001` 没开，先启动它：
+如果家里开发环境 `3001` 没开，先启动它：
 
 ```bash
 cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
@@ -299,7 +349,7 @@ node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 restart 
 
 ### 3. 开发完成后，怎么发布到正式环境
 
-当你在 `3001` 看着没问题后，执行下面这套：
+当你在家里验证没问题后，先执行下面这套：
 
 1. 进入项目目录
 
@@ -329,15 +379,32 @@ node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 restart 
 
 ```bash
 curl -I http://127.0.0.1:3000
+curl -I http://127.0.0.1:3000/insights
+curl -I http://127.0.0.1:3000/health
 ```
 
 然后访问：
 
 - `http://你的服务器IP:3000`
 
-### 4. 如果你暂时不开发了
+### 4. 公司 WSL 怎么更新
 
-可以把开发环境停掉，省资源：
+公司 WSL 不直接改代码，只从 GitHub 更新：
+
+```bash
+cd ~/biz-insight-mvp
+git pull
+npm install
+./node_modules/.bin/tsc --noEmit
+npm run build
+node ./node_modules/pm2/bin/pm2 restart biz-insight
+curl -I http://127.0.0.1:3000
+curl -I http://127.0.0.1:3000/insights
+```
+
+### 5. 如果你暂时不开发了
+
+家里开发机可以把开发环境停掉，省资源：
 
 ```bash
 cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
@@ -351,7 +418,7 @@ cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
 node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 restart biz-insight-dev
 ```
 
-### 5. 如果正式网站挂了
+### 6. 如果正式网站挂了
 
 先检查状态：
 
@@ -376,11 +443,45 @@ npm run build
 node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 restart biz-insight
 ```
 
-### 6. 以后只需要记住这几句
+如果 `/insights` 报 500，优先重新构建并重启：
 
-- 改代码看效果：看 `3001`
+```bash
+cd /home/openclaw-ubuntu-zyb/biz-insight-mvp
+./node_modules/.bin/tsc --noEmit
+npm run build
+node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 restart biz-insight
+curl -I http://127.0.0.1:3000/insights
+```
+
+### 7. 以后只需要记住这几句
+
+- 公司展示：只看 `3000`
+- 家里改代码看效果：可选看 `3001`
 - 给别人看正式站：看 `3000`
-- `3001` 看着没问题后：`tsc -> build -> restart biz-insight`
+- 发布到公司 WSL：`git pull -> tsc -> build -> restart biz-insight`
+
+### 8. LLM 调试台怎么用
+
+访问：
+
+```text
+http://你的服务器IP:3000/llm-trace
+```
+
+基本流程：
+
+1. 先在下方历史记录里找一条真实 LLM 调用
+2. 点击 `载入测试区`
+3. 在上方修改 `System Prompt` 或 `User Prompt`
+4. 点击 `试跑提示词`
+5. 对比测试输出和原始输出
+
+说明：
+
+- 测试区会调用 DeepSeek，因此会消耗 API
+- 测试区不会写入数据库
+- 测试区不会覆盖正式报告
+- 只有你确认新提示词稳定更好后，才考虑改正式 prompt
 
 ## 演示路径
 
@@ -415,10 +516,11 @@ node /home/openclaw-ubuntu-zyb/biz-insight-mvp/node_modules/pm2/bin/pm2 restart 
 以下问题在当前仓库中已经存在，但不影响你基于已验证路径继续演示：
 
 - README 之前版本与实际实现存在漂移，本次已按当前仓库状态更新
-- 当前构建和类型系统存在已知问题，`npm run lint` 与 `npm run build` 可能失败
-- 部分站点策略与公共类型定义尚未完全收口
+- 当前类型检查和生产构建已经通过，但仍需要保持每次发布前执行 `tsc` 和 `build`
+- 部分站点策略仍需要持续维护，外部网站网络波动可能导致抓取失败
 - 当前数据库结构演进仍偏 MVP 方式，后续需要正式迁移机制
 - 当前核心编排文件承担职责较多，后续需要拆分治理
+- LLM 与报告生成已有运行记录，但还需要进一步做白盒化页面，方便查看 prompt、输入、原始输出和证据链
 
 这意味着当前项目更适合：
 

@@ -12,6 +12,10 @@ type InsightItem = {
   insight_type: string | null;
   category: string | null;
   completeness_score: number | null;
+  source_domain?: string | null;
+  source_type?: string | null;
+  quality_score?: number | null;
+  quality_reason?: string | null;
   clean_text: string | null;
   insight_event_type: string;
   insight_importance_level: "" | "high" | "medium" | "low";
@@ -40,6 +44,10 @@ type ConsumptionApiItem = {
   display_category?: string | null;
   completeness_score?: number | null;
   confidence?: number | null;
+  source_domain?: string | null;
+  source_type?: string | null;
+  quality_score?: number | null;
+  quality_reason?: string | null;
   extracted_items?: Array<Partial<InsightItem> & { date?: string; summary?: string }>;
 };
 
@@ -237,6 +245,21 @@ function extractDomain(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return ""; }
 }
 
+function formatSourceType(value?: string | null): string {
+  const labels: Record<string, string> = {
+    company_newsroom: "公司新闻",
+    company_product_page: "产品/方案页",
+    company_case_page: "客户案例",
+    company_jobs_page: "招聘/人才",
+    media_article: "媒体报道",
+    source_media: "媒体来源",
+    official: "官方来源",
+    professional: "专业机构",
+    general: "普通来源"
+  };
+  return value ? labels[value] || value : "未标注";
+}
+
 function getImpactLevel(score: number | null): ImpactLevel {
   if (!score) return "中";
   if (score >= 0.8) return "高";
@@ -271,6 +294,10 @@ function mapConsumptionApiItemToInsightItem(item: ConsumptionApiItem): InsightIt
     insight_type: item.insight_type || null,
     category: item.display_category || item.category || "战略动向",
     completeness_score: item.completeness_score ?? item.confidence ?? null,
+    source_domain: item.source_domain || null,
+    source_type: item.source_type || null,
+    quality_score: item.quality_score ?? null,
+    quality_reason: item.quality_reason || null,
     clean_text: item.summary || "",
     insight_event_type: extracted.insight_event_type || "",
     insight_importance_level: extracted.insight_importance_level || "",
@@ -598,6 +625,11 @@ interface InsightCardData {
   url: string;
   cleanText: string;
   publishedAt: string;
+  fetchDate: string;
+  sourceDomain: string;
+  sourceType: string;
+  qualityScore: number | null;
+  qualityReason: string;
   score: number | null;
 }
 
@@ -657,10 +689,25 @@ function InsightCard({ item }: { item: InsightCardData }) {
         <p className="text-sm text-slate-700">{item.nextAction}</p>
       </div>
 
-      <div className="flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-100">
-        <div className="flex items-center gap-3">
-          <span>🌐 {extractDomain(item.url)}</span>
-          <span>📅 {formatDateFull(item.publishedAt)}</span>
+      <div className="rounded-lg border border-slate-200 bg-white p-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+          <span className="inline-flex items-center rounded bg-slate-100 px-2 py-0.5">
+            来源域名：{item.sourceDomain || extractDomain(item.url) || "未知"}
+          </span>
+          <span className="inline-flex items-center rounded bg-slate-100 px-2 py-0.5">
+            来源类型：{formatSourceType(item.sourceType)}
+          </span>
+          <span className="inline-flex items-center rounded bg-slate-100 px-2 py-0.5">
+            发布日期：{formatDateFull(item.publishedAt)}
+          </span>
+          <span className="inline-flex items-center rounded bg-slate-100 px-2 py-0.5">
+            抓取日期：{formatDateFull(item.fetchDate)}
+          </span>
+          {item.qualityScore !== null && (
+            <span className="inline-flex items-center rounded bg-emerald-50 px-2 py-0.5 text-emerald-700">
+              质量分：{Math.round(item.qualityScore)}
+            </span>
+          )}
           <span className={`group relative px-1.5 py-0.5 rounded text-xs ${
             item.entityType === "target_company" ? "bg-emerald-50 text-emerald-600" :
             item.entityType === "source_media" ? "bg-blue-50 text-blue-600" :
@@ -673,9 +720,14 @@ function InsightCard({ item }: { item: InsightCardData }) {
             </span>
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        {item.qualityReason && (
+          <p className="mt-2 text-xs leading-relaxed text-slate-500">
+            质量说明：{item.qualityReason}
+          </p>
+        )}
+        <div className="mt-2 flex items-center gap-2 text-xs">
           <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-moss hover:underline flex items-center gap-1">
-            原文 ↗
+            查看原文 ↗
           </a>
         </div>
       </div>
@@ -841,6 +893,21 @@ export default function InsightsPage() {
     markdown: string;
     meta: Record<string, unknown>;
     filename: string;
+    trace: {
+      promptVersion: string;
+      modelName: string;
+      timeRange: string;
+      filters: Record<string, unknown>;
+      inputItems: Array<{
+        company: string;
+        title: string;
+        date: string;
+        category: string;
+        url: string;
+        source_domain: string;
+        source_type: string;
+      }>;
+    };
   } | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
 
@@ -1100,6 +1167,11 @@ export default function InsightsPage() {
       url: item.url,
       cleanText: item.clean_text || "",
       publishedAt: item.published_at || "",
+      fetchDate: item.fetch_date || "",
+      sourceDomain: item.source_domain || extractDomain(item.url),
+      sourceType: item.source_type || "",
+      qualityScore: item.quality_score ?? null,
+      qualityReason: item.quality_reason || "",
       score: item.completeness_score,
     }))
   , [filteredItems]);
@@ -1149,6 +1221,9 @@ export default function InsightsPage() {
         summary: (item.summary || "").substring(0, 200),
         date: item.published_at ? new Date(item.published_at).toISOString().split("T")[0] : "",
         category: item.category || item.insight_type || "战略动向",
+        url: item.url || "",
+        source_domain: item.source_domain || extractDomain(item.url || ""),
+        source_type: item.source_type || "",
       }));
 
       const reportData = {
@@ -1186,7 +1261,14 @@ export default function InsightsPage() {
       setGeneratedReport({
         markdown: result.report_markdown,
         meta: result.report_meta,
-        filename: result.filename
+        filename: result.filename,
+        trace: {
+          promptVersion: result.report_meta?.prompt_version || "phua-report-v1",
+          modelName: result.report_meta?.model_name || "deepseek-chat",
+          timeRange: timeRangeLabel,
+          filters: reportData.filters,
+          inputItems: compactItems
+        }
       });
     } catch (error) {
       setReportError(error instanceof Error ? error.message : "未知错误");
@@ -1792,6 +1874,38 @@ export default function InsightsPage() {
                         <p className="font-medium text-ink">{targetCompanies.length}家</p>
                       </div>
                     </div>
+                    <div className="mt-4 rounded-lg border border-slate-200 bg-white">
+                      <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+                        <p className="text-xs font-medium text-slate-600">本次报告输入材料预览</p>
+                        <p className="text-xs text-slate-400">最多展示前 20 条</p>
+                      </div>
+                      <div className="max-h-56 overflow-y-auto">
+                        <table className="min-w-full text-xs">
+                          <thead className="bg-slate-50 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-medium text-slate-500">日期</th>
+                              <th className="px-3 py-2 text-left font-medium text-slate-500">公司</th>
+                              <th className="px-3 py-2 text-left font-medium text-slate-500">标题</th>
+                              <th className="px-3 py-2 text-left font-medium text-slate-500">来源</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {filteredItems.slice(0, 20).map((item: any, idx) => (
+                              <tr key={`${item.url}-${idx}`} className="hover:bg-slate-50">
+                                <td className="px-3 py-2 text-slate-500">{formatDateShort(item.published_at)}</td>
+                                <td className="px-3 py-2 text-slate-700">{item.company_name || "未知"}</td>
+                                <td className="px-3 py-2">
+                                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-moss hover:underline">
+                                    {(item.title || "无标题").slice(0, 42)}{(item.title || "").length > 42 ? "..." : ""}
+                                  </a>
+                                </td>
+                                <td className="px-3 py-2 text-slate-500">{item.source_domain || extractDomain(item.url || "")}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   </div>
                   <button
                     onClick={handleGenerateReport}
@@ -1859,6 +1973,57 @@ export default function InsightsPage() {
                     </div>
                   </div>
                   <div className="flex-1 overflow-y-auto p-6">
+                    <section className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded bg-white px-2 py-1 text-slate-600 border border-slate-200">
+                          Prompt：{generatedReport.trace.promptVersion}
+                        </span>
+                        <span className="rounded bg-white px-2 py-1 text-slate-600 border border-slate-200">
+                          模型：{generatedReport.trace.modelName}
+                        </span>
+                        <span className="rounded bg-white px-2 py-1 text-slate-600 border border-slate-200">
+                          时间范围：{generatedReport.trace.timeRange}
+                        </span>
+                        <span className="rounded bg-white px-2 py-1 text-slate-600 border border-slate-200">
+                          输入材料：{generatedReport.trace.inputItems.length} 条
+                        </span>
+                      </div>
+                      <details>
+                        <summary className="cursor-pointer text-sm font-medium text-slate-700">
+                          查看本报告使用的输入材料
+                        </summary>
+                        <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-slate-200 bg-white">
+                          <table className="min-w-full text-xs">
+                            <thead className="bg-slate-50 sticky top-0">
+                              <tr>
+                                <th className="px-3 py-2 text-left font-medium text-slate-500">日期</th>
+                                <th className="px-3 py-2 text-left font-medium text-slate-500">公司</th>
+                                <th className="px-3 py-2 text-left font-medium text-slate-500">分类</th>
+                                <th className="px-3 py-2 text-left font-medium text-slate-500">标题</th>
+                                <th className="px-3 py-2 text-left font-medium text-slate-500">来源</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {generatedReport.trace.inputItems.map((item, idx) => (
+                                <tr key={`${item.url}-${idx}`} className="hover:bg-slate-50">
+                                  <td className="px-3 py-2 text-slate-500">{item.date || "未知"}</td>
+                                  <td className="px-3 py-2 text-slate-700">{item.company}</td>
+                                  <td className="px-3 py-2 text-slate-500">{item.category}</td>
+                                  <td className="px-3 py-2">
+                                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-moss hover:underline">
+                                      {item.title || "无标题"}
+                                    </a>
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-500">
+                                    {item.source_domain || extractDomain(item.url)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    </section>
                     <div className="prose prose-sm max-w-none">
                       <div className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
                         {generatedReport.markdown}
